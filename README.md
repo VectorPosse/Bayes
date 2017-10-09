@@ -1,2 +1,2 @@
 # Bayes
-Material for teaching Bayesian data analysis
+Materials for teaching Bayesian data analysis
