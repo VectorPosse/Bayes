@@ -5,3 +5,4 @@
 .Rproj
 Bayes.Rproj
 *.nb.html
+stan_chunk_reprex.Rmd
