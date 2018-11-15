@@ -1,0 +1,170 @@
+---
+title: "Bayesian data analysis assignment"
+output: html_notebook
+---
+
+<!-- Please don't mess with the next few lines! -->
+<style>h5{font-size:2em;color:#0000FF}h6{font-size:1.5em;color:#0000FF}div.answer{margin-left:5%;border:1px solid #1E90FF;border-left-width:10px;padding:25px}</style>
+<!-- Please don't mess with the previous few lines! -->
+
+
+##### Question 1
+
+Suppose that we wish to predict whether a given stock will issue a dividend this year (“Yes” or “No”) based on $x$, last year's profit (in some unspecified units that don't matter for this problem). We examine a large number of companies and discover that the mean value of $x$ for companies that issued a dividend was $\bar{x} = 10$, while the mean for those that didn't was $\bar{x} = 0$. In addition, the standard deviation of $x$ for these two sets of companies was $\sigma = 6$. Finally, 80% of companies issued dividends. Assuming that $x$ follows a normal distribution, **predict the probability that a company will issue a dividend this year given that its profit was $x = 4$ last year.**
+
+We'll use Bayes's Theorem to solve this problem. The parameter $\theta$ is a discrete parameter that can be either $Y$ or $N$ (for "Yes" or "No") representing whether a stock issues a dividend or not.
+
+Since the process is a little involved, we'll break it down into easy-to-digest chunks. Make sure you're clear on each step before moving onto the next.
+
+###### (a).
+
+Write down a contextually meaningful interpretation of the mathematical expression $p(\theta = Y \mid x = 4)$. (This is the posterior that we need to calculate.)
+
+<div class = "answer">
+
+Please write up your answer here.
+
+</div>
+
+###### (b).
+
+Write down a contextually meaningful interpretation of the prior $p(\theta = Y)$.
+
+<div class = "answer">
+
+Please write up your answer here.
+
+</div>
+
+###### (c).
+
+According to the information given in the problem statement, what is the value of the prior $p(\theta = Y)$? Store this value in a variable called `prior`.
+
+<div class = "answer">
+
+```{r}
+# Uncomment the line below and replace the question mark to
+# store the value of the prior in a variable called prior.
+
+# prior = ?
+prior = 0.8
+prior
+```
+
+</div>
+
+###### (d).
+
+Write down a contextually meaningful interpretation of the likelihood $p(x = 4 \mid \theta = Y)$.
+
+<div class = "answer">
+
+Please write up your answer here.
+
+</div>
+
+###### (e).
+
+To calculate the likelihood $p(x = 4 \mid \theta = Y)$, we recall that last year's profits for companies that issue dividends are distributed according to the normal model $N(10, 6)$. The general formula for a normal model is
+
+$$\frac{1}{\sqrt{2 \pi \sigma^{2}}}e^{-(x - \mu)^{2}/2\sigma^{2}}$$
+Plug in all the known values to obtain a value for the likelihood. The R command for the square root is `sqrt`. The number $\pi$ is stored as `pi`. Powers are computed using the caret `^` except the exponential function, which uses `exp`.  For example, $e^{2\sqrt{1 + \pi^{2}}}$ would be calculated using the R code `exp(2 * sqrt(1 + pi^2))`. Be careful with parentheses and order of operations!
+
+Store your answer in a variable called `likelihood`.
+
+<div class = "answer">
+
+```{r}
+# Uncomment the line below and replace the question mark to
+# evaluate the normal model N(10, 6) at x = 4
+# and store the value in a variable called likelihood.
+
+# likelihood = ?
+likelihood <- (1/sqrt(2 * pi * 6^2)) * exp((-(4 - 10)^2)/(2 * 6^2))
+likelihood
+```
+
+</div>
+
+###### (f).
+
+The denominator of Bayes's Theorem (the "evidence") is
+
+$$\sum_{\theta} p(\theta) p(x \mid \theta).$$
+
+In this problem, the sum is only two terms, corresponding to the two possible values of $\theta$ ($Y$ or $N$). So it looks like the following:
+
+$$p(\theta = Y) p(x = 4 \mid \theta = Y) + p(\theta = N) p(x = 4 \mid \theta = N).$$
+
+You already know the first term of the sum $p(\theta = Y) p(x = 4 \mid \theta = Y)$. (This is just `prior * likelihood`.)
+
+What is $p(\theta = N)$? (You know $p(\theta = Y)$, so don't overthink this!)
+
+<div class = "answer">
+
+Please write up your answer here.
+
+</div>
+
+###### (g).
+
+To compute $p(x = 4 \mid \theta = N)$?, we'll do something very similar to what we did to compute the likelihood in Part (e). But now the normal model changes from $N(10, 6)$ to $N(0, 6)$. Why?
+
+<div class = "answer">
+
+Please write up your answer here.
+
+</div>
+
+###### (h).
+
+Using the normal model $N(0, 6)$, compute $p(x = 4 \mid \theta = N)$.
+
+```{r}
+# Evaluate the normal model N(0, 6) at x = 4.
+# (We won't store the value this time.)
+
+(1/sqrt(2 * pi * 6^2)) * exp((-(4 - 0)^2)/(2 * 6^2))
+```
+
+###### (i).
+
+Put parts (f), (g), and (h) all together now to compute the denominator for Bayes's Theorem:
+
+$$p(\theta = Y) p(x = 4 \mid \theta = Y) + p(\theta = N) p(x = 4 \mid \theta = N).$$
+
+Store your answer in a variable called `evidence`.
+
+```{r}
+# Uncomment the line below and replace the question mark to
+# evaluate the denominator for Bayes's Theorem (the evidence)
+# and store the value in a variable called evidence.
+
+# evidence = ?
+evidence <- prior * likelihood + 0.2 * (1/sqrt(2 * pi * 6^2)) * exp((-(4 - 0)^2)/(2 * 6^2))
+evidence
+```
+
+###### (j).
+
+If everything worked correctly, the following code should compute the correct posterior probability:
+
+```{r}
+# Uncomment the lines below to calculate and report the posterior.
+
+# posterior <- prior * likelihood / evidence
+# posterior
+posterior
+```
+
+The answer should be 0.7518525. (If you didn't get that, go back and check your work *carefully*!) State this result as a conclusion in the context of the original problem.
+
+<div class = "answer">
+
+Please write up your answer here.
+
+</div>
+
+
+##### Question 2
+
