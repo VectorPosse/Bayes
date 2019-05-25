@@ -1,5 +1,5 @@
 ---
-title: "Discrete Bayes example"
+title: "1. Discrete Bayes example"
 output: html_notebook
 ---
 
@@ -55,11 +55,13 @@ We can plot the posterior probability distribution as follows. First, we store t
 theta <- 0:5
 post_prob <- c(0, 1/15, 2/15, 3/15, 4/15, 5/15)
 plot_df <- data.frame(theta, post_prob)
+plot_df
 ```
 
 Then we create a "lollipop" plot (which is common for probability mass functions).
 
 ```{r}
+library(ggplot2)
 ggplot(plot_df, aes(y = post_prob, x = theta)) +
     geom_point() +
     geom_segment(aes(y = 0, yend = post_prob, x = theta, xend = theta)) +

@@ -1,5 +1,5 @@
 ---
-title: "Bayes's Theorem for continuous distributions"
+title: "2. Bayes's Theorem for continuous distributions"
 output: html_notebook
 ---
 
@@ -27,7 +27,7 @@ To illustrate how this works, we define a function called `bayes_plot_continuous
 # calculates the posterior, and then plots all three functions.
 bayes_plot_continuous <- function(prior, likelihood, from, to) {
     # Calculate the area under the likelihood function (by integration).
-    likelihood_area <- integrate(likelihood, from, to)
+    likelihood_area <- integrate(likelihood, lower = from, upper = to)
     
     # Scale the likelihood function by its area.
     likelihood_scaled <- function(theta) {
@@ -82,10 +82,10 @@ Suppose we have binomial data. In 18 trials, we observe 12 successes. The likeli
 $$p(x = 12 \mid \theta) \propto \theta^{12} (1 - \theta)^{6}$$
 The parameter $\theta$ can take on any real number value between zero and one. Therefore, any probability distribution or likelihood function involving $\theta$ must be expressed as a continuous function (as opposed to, say, a table of values like for a discrete random variable).
 
-The code below defines the binomial likelihood function for 12 successes in a sample of size 18. (Note that in R, probability density functions start with `d`, like `dbinom` or `dnorm`.)
+The code below defines the binomial likelihood function for 12 successes in a sample of size 18.
 
 ```{r}
-likelihood1 <- function(theta) { dbinom(x = 12, size = 18, prob = theta) }
+likelihood1 <- function(theta) { theta ^ 12 * (1 - theta) ^ 6 }
 ```
 
 Look at a plot of this likelihood function:
@@ -101,7 +101,13 @@ likelihood1_plot <- ggplot(data.frame(x = c(0,1)), aes(x = x)) +
 likelihood1_plot
 ```
 
-Keep in mind that this is not a probability density function; the area under this curve is not one. What this shows is for each possible value of $\theta$, what is the probability of seeing 12 successes out of 18 trials given that value of $\theta$. If a sample of 18 is taken from a population whose success rate $\theta$ is somewhere in the 0.6--0.75 range, there is a pretty good chance of seeing 12 successes. Not so much for values outside that range.
+Keep in mind that this is not a probability density function; the area under this curve is nowhere close to one:
+
+```{r}
+integrate(likelihood1, lower = 0, upper = 1)
+```
+
+What this shows is for each possible value of $\theta$, what is the probability of seeing 12 successes out of 18 trials given that value of $\theta$. If a sample of 18 is taken from a population whose success rate $\theta$ is somewhere in the 0.6--0.75 range, there is a pretty good chance of seeing 12 successes. Not so much for values outside that range.
 
 
 ## Choosing a uniform prior
@@ -165,7 +171,7 @@ bayes_plot_continuous(prior4, likelihood1, 0, 1)
 Now let's go back through the previous cases, but make the data much weaker. Instead of 12 successes in 18 trials, suppose we only observe 2 successes in 3 trials. Notice that the proportion of successes hasn't changed here, just the sample size. Observe that in each case, the posterior is much closer to the prior. There just isn't enough data for us to revise our prior belief radically.
 
 ```{r}
-likelihood2 <- function(theta) { dbinom(x = 2, size = 3, prob = theta) } 
+likelihood2 <- function(theta) { theta ^ 2 * (1 - theta) ^ 1 } 
 bayes_plot_continuous(prior1, likelihood2, 0, 1)
 ```
 

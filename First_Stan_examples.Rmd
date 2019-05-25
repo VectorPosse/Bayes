@@ -1,12 +1,12 @@
 ---
-title: "Stan examples"
+title: "First Stan examples"
 output: html_notebook
 ---
 
 
 ## Introduction
 
-Stan is a platform for running statistical computations, especially Bayesian data analysis. The mechanism by which it works (Hamiltonian Markov Chain Monte Carlo) is sophisticated. Rather than describing the technical mathematics "under the hood", we'll simply describe how to set up a model and compute a posterior distribution.
+Stan is a platform for running statistical computations, especially Bayesian data analysis. The mechanism by which it works (Hamiltonian Markov Chain Monte Carlo) is sophisticated. Here we'll describe how to set up a model and compute a posterior distribution.
 
 We'll also see a nice dashboard that allows us to diagnose model fit and explore and visualize various properties of the posterior distribution.
 
@@ -15,11 +15,22 @@ The first time you run the code chunks in this file, it will take a while. Be pa
 
 ## Preliminaries
 
+Before doing anything, you will need to run the following code at the Console. (In other words, copy and paste the following code into the Console and run it.) You only need to run this code once and Stan should work fine forever after that.
+
+```
+dotR <- file.path(Sys.getenv("HOME"), ".R")
+if (!file.exists(dotR)) dir.create(dotR)
+M <- file.path(dotR, "Makevars")
+if (!file.exists(M)) file.create(M)
+cat("CXX14 = g++ -std=c++1y -Wno-unused-variable -Wno-unused-function -fPIC", file = M, sep = "\n")
+```
+
 Load necessary packages:
 
 ```{r, message = FALSE}
 library(rstan)
 library(shinystan)
+library(sjstats)
 ```
 
 Stan will take a fair amount of time the first time it's run on a model. The following bit of code tells Stan not to recompile code that has already been compiled once so that it won't take so long after the first time.
@@ -28,10 +39,10 @@ Stan will take a fair amount of time the first time it's run on a model. The fol
 rstan_options(auto_write = TRUE)
 ```
 
-We set the seed so that random processes look the same every time the document is run.
+Finally, the following code will detect if there are multiple cores available for parallel processing, and if so, use those cores to speed up the sampling process.
 
 ```{r}
-set.seed(54321)
+options(mc.cores = parallel::detectCores())
 ```
 
 
@@ -39,32 +50,32 @@ set.seed(54321)
 
 Stan code looks quite different from R code. (Stan is actually coded in C.) We'll see later, for example, that each line must terminate with a semicolon, and comments use two forward slashes.
 
-There are three required code blocks in a Stan program. The first is called `data` and it reads in the raw data. The second is `parameters` in which you tell Stan the parameters for which you're conducting statistical inference. The third is `model` where you describe the statistical model.
+There are three basic code blocks in a simple Stan program. The first is called `data` and it reads in the raw data. The second is `parameters` in which you tell Stan the parameters for which you're conducting statistical inference. The third is `model` where you describe the statistical model.
 
 There are other, more advanced possibilities for code blocks, but those three suffice for a complete model.
 
 
 ## Storing the data
 
-We re-create the analysis of 12 successes in 18 trials from the `Continuous_Bayes` notes.
+We re-create the analysis of 12 successes in 18 trials from the "Continuous Bayes" notes.
 
 Stan is a little particular about the form of the data. It requires a `list` from R. Here's how we do that. First, just store the values we need.
 
 ```{r}
-N <- 18  # Define the sample size
-y <- c(rep(1, 12), rep(0, 6))  # 12 successes and 6 failures
+N1 <- 18  # Define the sample size
+y1 <- c(rep(1, 12), rep(0, 6))  # 12 successes and 6 failures
 ```
 
 The line defining `y` is just using an R trick to get 12 ones and 6 zeros. Observe:
 
 ```{r}
-y
+y1
 ```
 
 Now we bundle `N` and `y` together into a list.
 
 ```{r}
-stan_data <- list(N = N, y = y)
+stan_data <- list(N = N1, y = y1)
 stan_data
 ```
 
@@ -81,7 +92,6 @@ R Markdown is awesome, so it gives us a way to create a Stan model within a code
 
 We also use the option `cache = TRUE` in the header of the code chunk. This chunk takes a while the first time it's run; however, once the result is cached, it won't run again even when you "Run All" code chunks. (You may also ignore any warnings that may appear below the chunk once it's finished running.)
 
-**Be aware that there is a bug in R notebooks that prevents the following Stan code chunk from appearing in the HTML file. So if you are looking at the HTML file, be sure to go back to the R notebook to see the Stan code.**
 
 ```{stan, output.var = "bin_unif", cache = TRUE}
 data {
@@ -134,13 +144,14 @@ The second line is the likelihood function. An event that consists of a success/
 
 ### Sampling from the model
 
-Now we sample from the model using our data.
+Now we sample from the model using our data. (Since there are random processes in play, we'll set the seed to make our work reproducible.)
 
 ```{r}
+set.seed(54321)
 fit_bin_unif <- sampling(bin_unif, data = stan_data)
 ```
 
-There is a lot of output here! The MCMC algorithm is running four "chains" to try to explore the shape of the posterior distribution.
+There is a lot of output here, showing the progress of running each chain.
 
 ### Summarizing the model
 
@@ -157,20 +168,138 @@ Ignore the line that starts with `lp__`; we only care about the values of `theta
 We can also make a plot of the posterior distribution.
 
 ```{r}
-stan_dens(fit_bin_unif)
+plot(fit_bin_unif, plotfun = "dens")
 ```
 
-Although it's a little rough in shape due to the fact that the posterior is simulated, you can see that it's close to the theoretically correct posterior shown in `Continuous_Bayes`. It will be easier to see if we put it on the same x-axis scale as it was there:
+Although it's a little rough in shape due to the fact that the posterior is simulated, you can see that it's close to the theoretically correct posterior shown in the "Continuous Bayes" notes. It will be easier to see if we put it on the same x-axis scale as it was there:
 
 ```{r}
-stan_dens(fit_bin_unif) +
+plot(fit_bin_unif, plotfun = "dens") +
     xlim(0,1)
 ```
+
+Let's try some other plotting options.
+
+The default option for `plot` gives you 80% and 95% credible intervals for our parameters. We would likely need a much higher "effective sample size" to get good estimates of these, especially at the 95% level, but at least we can see the code we need.
+
+```{r}
+plot(fit_bin_unif)
+```
+
+Note that these intervals are *not* highest density intervals (HDIs), but rather are computed using quantiles from the sampled values. If we want an HDI, we can use the `hdi` function from the `sjstats` package. The `prob` argument allows us to specify the percents we want. (The default for `hdi` is 90%.)
+
+```{r}
+hdi(fit_bin_unif, prob = c(0.8, 0.95))
+```
+
+Due to the relatively symmetric shape of our distribution, the posterior credible intervals from Stan and the HDIs match up pretty closely.
+
+
+The following is a "traceplot" showing the chains. You use this to diagnose chain mixing.
+
+```{r}
+plot(fit_bin_unif, plotfun = "trace")
+```
+
+This is a histogram of the sampled values of theta:
+
+```{r}
+plot(fit_bin_unif, plotfun = "hist")
+```
+
+These are diagnostic plots for the MCMC sampling. They are somewhat technical; see the help file for the `stan_diag` function to get more information.
+
+```{r}
+plot(fit_bin_unif, plotfun = "diag")
+```
+
+Here's a similar series of plots, but for one parameter at a time. We specify the desired parameter using the `par` argument. (The same help page for `stan_diag` also explains the `stan_par` function.)
+
+```{r}
+plot(fit_bin_unif, plotfun = "stan_par", par = "theta")
+```
+
+This shows the values of $\hat{R}$ for each parameter sampled. There are two bars here because technically the sampler produced `theta` and `lp__`. This plot is not very informative.
+
+```{r}
+plot(fit_bin_unif, plotfun = "rhat")
+```
+
+Same as the above, but for "ESS", the "Effective Sample Size" (as a proportion of the total number of samples).
+
+```{r}
+plot(fit_bin_unif, plotfun = "ess")
+```
+
+Same as above, but for the "MCSE", or the "Monte Carlo Standard Error" (as a proportion of the standard deviation in the posterior distribution).
+
+```{r}
+plot(fit_bin_unif, plotfun = "mcse")
+```
+
+The following graph is slightly more useful. It shows the autocorrelation of the sequence of sampled values. The sequence of values is compared to a "shifted" version of itself. For example, a lag of 1 means that the sequence is compared to a copy of itself shifted over one value. Since one sampled value affects the location of the next sampled value, we would expect there to be some correlation from one value to the next. A lag of 2 compares the sequence to itself shifted by two values. We would expect the correlation to decrease as we move further away from any given sampled value.
+
+We have to pass a parameter to the `pars` argument to tell the `plot` function which parameter we wish to plot.
+
+```{r}
+plot(fit_bin_unif, plotfun = "ac", pars = "theta")
+```
+
+
+## Examining the prior
+
+By simply commenting out the likelihood function, we can sample only from the prior.
+
+```{stan, output.var = "bin_unif_prior", cache = TRUE}
+data {
+    int<lower = 0> N;
+    int<lower = 0, upper = 1> y[N];
+}
+parameters {
+    real<lower = 0, upper = 1> theta;
+}
+model {
+    theta ~ uniform(0, 1);  // prior
+//    y ~ bernoulli(theta);   // likelihood
+}
+```
+
+For convenience, we'll also tell the `sampling` function not to print out all the information about processing the chains by using the argument `refresh = 0`.
+
+```{r}
+set.seed(54321)
+fit_bin_unif_prior <- sampling(bin_unif_prior,
+                               data = stan_data,
+                               refresh = 0)
+```
+
+```{r}
+fit_bin_unif_prior
+```
+
+```{r}
+plot(fit_bin_unif_prior, plotfun = "hist")
+```
+
+Yep, that looks like a uniform distribution.
+
+Note that the same thing could be done a different way, by simply leaving out the data block. The following is perfectly valid Stan code:
+
+```
+parameters {
+    real<lower = 0, upper = 1> theta;
+}
+model {
+    theta ~ uniform(0, 1);
+}
+```
+
+By sampling from that model (leaving out the `data` argument to the `sampling` function), you would also get a uniform distribution. The reason for using the previous method is that in a typical application you do have data, and you do have a model that includes a likelihood function, but you might want to temporarily check that your prior is sensible.
 
 
 ## Normal prior (far from data)
 
-The next example in `Continuous_Bayes` is about selecting the normal prior
+The next example in "Continuous Bayes" is about selecting the normal prior
 
 $$\theta \sim N(0.3, 0.1).$$
 
@@ -194,11 +323,13 @@ model {
 }
 ```
 
-Once again, we sample from the model using our data. We'll also tell the code chunk to skip printing the output. (Well, it will hide the results in the HTML document. It doesn't seem to hide the output in the R notebook for some reason.)
+Once again, we sample from the model using our data. We'll also tell the `sampling` function not to print out all the information about processing the chains by using the argument `refresh = 0`.
 
-```{r, results = "hide"}
+```{r}
+set.seed(54321)
 fit_bin_norm1 <- sampling(bin_norm1,
-                          data = stan_data)
+                          data = stan_data,
+                          refresh = 0)
 ```
 
 ```{r}
@@ -235,9 +366,10 @@ model {
 }
 ```
 
-```{r, results = "hide"}
+```{r}
 fit_bin_norm2 <- sampling(bin_norm2,
-                          data = stan_data)
+                          data = stan_data,
+                          refresh = 0)
 ```
 
 ```{r}
@@ -257,23 +389,27 @@ Stan does not have a built-in expression for a triangular distribution, so we'll
 
 ## Change the data
 
-The `Continuous_Bayes` file also shows the effect of the prior in situations of sparse data. What if we have only 2 successes in 3 trials?
+The "Continuous Bayes" notes also show the effect of the prior in situations of sparse data. What if we have only 2 successes in 3 trials?
 
 ```{r}
-N <- 3  # Define the sample size
-y <- c(1, 1, 0)  # 2 successes and 1 failure
-stan_data_small <- list(N = N, y = y)
+N2 <- 3  # Define the sample size
+y2 <- c(1, 1, 0)  # 2 successes and 1 failure
+stan_data_small <- list(N = N2, y = y2)
 ```
 
 Let's apply the three models already developed to this new data. Note that we do not need to run any more Stan code. This is just sampling from existing models using new data.
 
-```{r, results = "hide"}
+```{r}
+set.seed(54321)
 fit_bin_unif_small <- sampling(bin_unif,
-                               data = stan_data_small)
+                               data = stan_data_small,
+                               refresh = 0)
 fit_bin_norm1_small <- sampling(bin_norm1,
-                                data = stan_data_small)
+                                data = stan_data_small,
+                                refresh = 0)
 fit_bin_norm2_small <- sampling(bin_norm2,
-                                data = stan_data_small)
+                                data = stan_data_small,
+                                refresh = 0)
 ```
 
 Summaries and plots:
