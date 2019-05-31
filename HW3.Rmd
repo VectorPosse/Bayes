@@ -1,0 +1,350 @@
+---
+title: "Homework 3"
+author: "Put your name here"
+date: "Put the date here"
+output: html_notebook
+---
+
+<!-- Please don't mess with the next few lines! -->
+<style>h5{font-size:2em;color:#0000FF}h6{font-size:1.5em;color:#0000FF}div.answer{margin-left:5%;border:1px solid #0000FF;border-left-width:10px;padding:25px} div.summary{background-color:rgba(30,144,255,0.1);border:3px double #0000FF;padding:25px}</style>
+<!-- Please don't mess with the previous few lines! -->
+
+
+## Preliminaries
+
+```{r, message = FALSE}
+library(tidyverse)
+library(rstan)
+library(MASS)
+library(broom)
+library(bayesplot)
+```
+
+
+##### Question 1
+
+Suppose that we wish to predict whether a given stock will issue a dividend this year (“Yes” or “No”) based on $x$, last year's profit (in some unspecified units that don't matter for this problem). We examine a large number of companies and discover that the mean value of $x$ for companies that issued a dividend was $\bar{x} = 10$, while the mean for those that didn't was $\bar{x} = 0$. In addition, the standard deviation of $x$ for these two sets of companies was $\sigma = 6$. Finally, 80% of companies issued dividends. Assuming that $x$ follows a normal distribution, **predict the probability that a company will issue a dividend this year given that its profit was $x = 4$ last year.**
+
+We'll use Bayes's Theorem to solve this problem. The parameter $\theta$ is a discrete parameter that can be either $Y$ or $N$ (for "Yes" or "No") representing whether a stock issues a dividend or not.
+
+Since the process is a little involved, we'll break it down into easy-to-digest chunks. Make sure you're clear on each step before moving onto the next.
+
+###### (a).
+
+Write down a contextually meaningful interpretation of the mathematical expression $p(\theta = Y \mid x = 4)$. (This is the posterior that we need to calculate.)
+
+<div class = "answer">
+
+Please write up your answer here.
+
+</div>
+
+###### (b).
+
+Write down a contextually meaningful interpretation of the prior $p(\theta = Y)$.
+
+<div class = "answer">
+
+Please write up your answer here.
+
+</div>
+
+###### (c).
+
+According to the information given in the problem statement, what is the value of the prior $p(\theta = Y)$? Store this value in a variable called `prior`.
+
+<div class = "answer">
+
+```{r}
+# Uncomment the line below and replace the question mark to
+# store the value of the prior in a variable called prior.
+
+# prior <- ?
+```
+
+</div>
+
+###### (d).
+
+Write down a contextually meaningful interpretation of the likelihood $p(x = 4 \mid \theta = Y)$.
+
+<div class = "answer">
+
+Please write up your answer here.
+
+</div>
+
+###### (e).
+
+To calculate the likelihood $p(x = 4 \mid \theta = Y)$, we recall that last year's profits for companies that issue dividends are distributed according to the normal model $N(10, 6)$. The general formula for a normal model is
+
+$$\frac{1}{\sigma \sqrt{ 2 \pi}}e^{-(x - \mu)^{2}/2\sigma^{2}}$$
+Plug in all the known values to obtain a value for the likelihood. The R command for the square root is `sqrt`. The number $\pi$ is stored as `pi`. Powers are computed using the caret `^` except the exponential function, which uses `exp`.  For example, $e^{2\sqrt{1 + \pi^{2}}}$ would be calculated using the R code `exp(2 * sqrt(1 + pi^2))`. Be careful with parentheses and order of operations!
+
+Store your answer in a variable called `likelihood`. (Hint: the answer should be 0.04032845)
+
+<div class = "answer">
+
+```{r}
+# Uncomment the lines below and replace the question mark to
+# evaluate the normal model N(10, 6) at x = 4
+# and store the value in a variable called likelihood.
+
+# likelihood <- ?
+# likelihood
+```
+
+</div>
+
+###### (f).
+
+The denominator of Bayes's Theorem (the "evidence") is
+
+$$\sum_{\theta} p(\theta) p(x \mid \theta).$$
+
+In this problem, the sum is only two terms, corresponding to the two possible values of $\theta$ ($Y$ or $N$). So it looks like the following:
+
+$$p(\theta = Y) p(x = 4 \mid \theta = Y) + p(\theta = N) p(x = 4 \mid \theta = N).$$
+
+You already know the first term of the sum $p(\theta = Y) p(x = 4 \mid \theta = Y)$. (This is just `prior * likelihood`.)
+
+What is the value of $p(\theta = N)$? (You know $p(\theta = Y)$, so don't overthink this!)
+
+<div class = "answer">
+
+Please write up your answer here.
+
+</div>
+
+###### (g).
+
+To compute $p(x = 4 \mid \theta = N)$?, we'll do something very similar to what we did to compute the likelihood in Part (e). But now the normal model changes from $N(10, 6)$ to $N(0, 6)$. Why?
+
+<div class = "answer">
+
+Please write up your answer here.
+
+</div>
+
+###### (h).
+
+Using the normal model $N(0, 6)$, compute $p(x = 4 \mid \theta = N)$.
+
+<div class = "answer">
+
+```{r}
+# Evaluate the normal model N(0, 6) at x = 4.
+
+# (We won't store the value this time.)
+```
+
+</div>
+
+###### (i).
+
+Put parts (f), (g), and (h) all together now to compute the denominator for Bayes's Theorem:
+
+$$p(\theta = Y) p(x = 4 \mid \theta = Y) + p(\theta = N) p(x = 4 \mid \theta = N).$$
+
+Store your answer in a variable called `evidence`.
+
+<div class = "answer">
+
+```{r}
+# Uncomment the lines below and replace the question mark to
+# evaluate the denominator for Bayes's Theorem (the evidence)
+# and store the value in a variable called evidence.
+
+# evidence <- ?
+# evidence
+```
+
+</div>
+
+###### (j).
+
+If everything worked correctly, the following code should compute the correct posterior probability:
+
+```{r}
+# Uncomment the lines below to calculate and report the posterior.
+
+# posterior <- prior * likelihood / evidence
+# posterior
+```
+
+The answer should be 0.7518525. (If you didn't get that, go back and check your work *carefully*!) State this result as a conclusion in the context of the original problem.
+
+<div class = "answer">
+
+Please write up your answer here.
+
+</div>
+
+
+##### Question 2
+
+From the `cats` data, consider a relationship in which the between the heart weight of cats (in grams) is predicted from their body weight (in kilograms).
+
+Before we do inference, let's prepare the data by mean-centering the explanatory variable. This will ensure that the intercept is interpretable. (The value of the intercept will be the predicted heart weight when the body weight is average.)
+
+```{r}
+cats2 <- cats %>%
+    mutate(Bwt_mc = Bwt - mean(Bwt))
+str(cats2)
+```
+
+We store the data in a list:
+
+```{r}
+N <- NROW(cats2)
+y <- cats2$Hwt
+x <- cats2$Bwt_mc
+cat_data <- list(N = N, y = y, x = x)
+str(cat_data)
+```
+
+The following Stan code builds a simple linear regression model on the data:
+
+```{stan, output.var = "cat_stan", cache = TRUE}
+data {
+  int<lower = 0> N; // sample size
+  vector[N] x;      // explanatory variable
+  vector[N] y;      // response variable
+}
+parameters {
+  real beta0;               // intercept
+  real beta1;               // slope
+  real<lower = 0> sigma;    // residual errors
+}
+model {
+  y ~ normal(beta0 + beta1 * x, sigma);
+}
+generated quantities {
+  real y_rep[N];
+  
+  for (n in 1:N) {
+    y_rep[n] = normal_rng(beta0 + beta1 * x[n], sigma);
+  }
+}
+```
+
+```{r}
+fit_cat_stan <- sampling(cat_stan, data = cat_data, refresh = 0)
+```
+
+###### (a).
+
+Print the summary statistics for the sampled values of the intercept `beta0`, slope `beta1`, and residual error `sigma` of `fit_cat_stan`.
+
+<div class = "answer">
+
+```{r}
+# Add code here to print summary statistics for the
+# intercept and slope.
+```
+
+</div>
+
+###### (b).
+
+Use the `stan_dens` function to plot the simulated posterior distributions of the regression parameters (`beta0`, `beta1`, `sigma`).
+
+<div class = "answer">
+
+```{r}
+# Add code here to plot the simulated posterior distributions
+# of the regression parameters.
+```
+
+</div>
+
+###### (c).
+
+In a few sentences, interpret the output as it relates to the linear regression model you're trying to find.
+
+<div class = "answer">
+
+Please write up your answer here.
+
+</div>
+
+###### (d).
+
+Run a standard linear regression using `lm`. Is the result consistent with the Bayesian results above? (Be sure to address all three parameters, $\beta_{0}$, $\beta_{1}$, and $\sigma$.)
+
+<div class = "answer">
+
+```{r}
+# Add code here to run a standard linear regression using lm.
+```
+
+Please write up your answer here.
+
+</div>
+
+###### (e).
+
+Since there are no priors specified, the default in Stan is to use uniform priors. (These would be uniform on $(-\infty, \infty)$ for $\beta_{0}$ and $\beta_{1}$, and $[0, \infty)$ for $\sigma$ because of the hard-coded constraint.) Explain why these priors are not ideal.
+
+<div class = "answer">
+
+Please write up your answer here.
+
+</div>
+
+###### (f).
+
+Here you will choose better priors. When choosing *informative priors*, it's considered cheating to look at the data---informative priors are supposed to come from substantive knowledge you already have before you collect data. (And you may or may not know anything about typical body weights and heart weights for cats.) Choosing *weakly informative priors* is a matter of finding a range of plausible values and finding a distribution that puts substantial probability in ranges even way beyond that. Such weakly informative priors will still be better than uniform priors.
+
+Run a new Stan model by copying and pasting the Stan code chunk above and making changes to it. Change the `output.var` in the header to `cat_stan2`. Add some sensible prior distributions for the intercept and slope parameters. Use a `cauchy(0, 5)` prior for `sigma`. (Don't worry too much about why---the Cauchy distribution is commonly recommended as a weakly informative prior for standard deviations.) Remember that your `x` variable has been mean-centered, so that may affect your choice of prior.
+
+Also sample from the model in this step in a separate code chunk using the `sampling` function.
+
+<div class = "answer">
+
+Copy/paste/modify `stan` chunk here.
+
+Also sample from the model.
+
+</div>
+
+###### (g).
+
+Follow the same steps as above to print the posterior summary and visualize it.
+
+<div class = "answer">
+
+Please write up answer here.
+
+</div>
+
+###### (h).
+
+How do your results from part (h) compare to the results from uniform priors? Why do you expect that?
+
+<div class = "answer">
+
+Please write up answer here.
+
+</div>
+
+###### (i).
+
+Here is a visualization of the posterior predictive distribution:
+
+```{r}
+cat_samples <- extract(fit_cat_stan)
+y_rep <- cat_samples$y_rep
+ppc_scatter_avg(y, y_rep) +
+  xlim(5, 21) +
+  ylim(5, 21) +
+  coord_fixed()
+```
+
+How do you interpret this picture? What does this tell you about data simulated from the posterior distribution compared to the original data?
+
+<div class = "answer">
+
+Please write up answer here.
+
+</div>

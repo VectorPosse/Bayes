@@ -1,0 +1,432 @@
+---
+title: "9.5: Batting average"
+output: html_notebook
+---
+
+
+## Introduction
+
+This is the "Batting average" example in Section 9.5 of Kruschke (but with some changes).
+
+
+## Preliminaries
+
+Load necessary packages:
+
+```{r, message = FALSE}
+library(tidyverse)
+library(rstan)
+library(shinystan)
+library(bayesplot)
+library(GGally)
+```
+
+Set Stan to save compiled code.
+
+```{r}
+rstan_options(auto_write = TRUE)
+```
+
+Set Stan to use parallel processing where possible.
+
+```{r}
+options(mc.cores = parallel::detectCores())
+```
+
+
+## Data
+
+First we import the data. (Make sure the file "BattingAverage.csv" is in your project directory.)
+
+```{r}
+ba_data <- read_csv("BattingAverage.csv")
+ba_data
+```
+
+The only change we need to the data we pass to Stan is that we have to tell it the number of categories `C`. There are 9 possible positions. We'll pass the position number (`PriPosNumber`) to Stan as well.
+
+```{r}
+C <- 9
+S <- NROW(ba_data) # number of subjects
+N <- ba_data$AtBats # number of trials for each subject
+y <- ba_data$Hits # number of successes for each subject
+cats <- ba_data$PriPosNumber
+stan_data <- list(C = C, S = S, N = N, y = y, cats = cats)
+```
+
+
+## Stan code
+
+We incorporate player position to allow different values of $\omega$ and $\kappa$ for each position. There will still be a parameter called $\omega_{0}$ that will serve as the mode of the beta "hyper-hyperprior" whereas $\omega_{c}$ ($1 \leq c \leq 9$) will be the mode of the hyperprior for each category of player (informing the $\theta$ for each player). The same will be true for $\kappa_{0}$ versus the collection of $\kappa_{c}$.
+
+The gamma hyperpriors on $\kappa$ turn out to cause divergent transitions. We'll use an exponential distribution (with rate parameter 1) instead, from which Stan seems to be able to sample more easily.
+
+We use vectors instead of arrays. This allows us to multiply things out without using `for` loops. For example, the lines
+
+```
+a = omega .* (kappa - 2) + 1;
+b = (1 - omega) .* (kappa - 2) + 1;
+```
+
+use the operator `.*` instead of just `*`. That's because `a` and `b` are actually vectors of length 9, as are `omega` and `kappa`. So each equation actually represents 9 different equations:
+
+```
+a[1] = omega[1] * (kappa[1] - 2) + 1;
+a[2] = omega[2] * (kappa[2] - 2) + 1;
+a[3] = omega[3] * (kappa[3] - 2) + 1;
+...
+```
+
+In the `model` block, the sampling statement for `theta` also looks a little weird:
+
+```
+theta ~ beta(a[cats], b[cats]);
+```
+
+This is sampling 948 values, but `a[cats]` and `b[cats]` refer to only the nine possible values of `a` or `b` depedning on the category (position) of the player for whom we're sampling `theta`.
+
+```{stan, output.var = "ba", cache = TRUE}
+data {
+  int<lower = 0> C;
+  int<lower = 0> S;
+  int<lower = 0> N[S];
+  int<lower = 0> y[S];
+  int<lower = 0> cats[S];
+}
+transformed data {
+  real<lower = 0> A_omega_0;
+  real<lower = 0> B_omega_0;
+  real<lower = 0> R_kappa_0;
+
+  A_omega_0 = 2;
+  B_omega_0 = 2;
+  R_kappa_0 = 1;
+}
+parameters {
+  vector<lower = 0, upper = 1>[S] theta;
+  vector<lower = 0, upper = 1>[C] omega;
+  vector<lower = 0>[C] kappa_minus_two;
+  real<lower = 0> kappa_minus_two_0;
+  real<lower = 0, upper = 1> omega_0;
+}
+transformed parameters {
+  real<lower = 2> kappa_0;
+  vector<lower = 2>[C] kappa;
+  real<lower = 0> a_0;
+  real<lower = 0> b_0;
+  vector<lower = 0>[C] a;
+  vector<lower = 0>[C] b;
+
+  kappa_0 = kappa_minus_two_0 + 2;
+  a_0 = omega_0 * (kappa_0 - 2) + 1;
+  b_0 = (1 - omega_0) * (kappa_0 - 2) + 1;
+  kappa = kappa_minus_two + 2;
+  a = omega .* (kappa - 2) + 1;
+  b = (1 - omega) .* (kappa - 2) + 1;
+}
+model {
+  omega_0 ~ beta(A_omega_0, B_omega_0);
+  kappa_minus_two_0 ~ exponential(R_kappa_0);
+  omega ~ beta(a_0, b_0);
+  kappa_minus_two ~ exponential(R_kappa_0);
+  theta ~ beta(a[cats], b[cats]);
+  y ~ binomial(N, theta);
+}
+generated quantities {
+  int<lower = 0> y_rep[S];
+  
+  for (s in 1:S) {
+    y_rep[s] = binomial_rng(N[s], theta[s]);
+  }
+}
+```
+
+
+## Sampling from the model
+
+```{r}
+set.seed(11111)
+fit_ba <- sampling(ba, data = stan_data, refresh = 0)
+```
+
+
+## Diagnosing the model
+
+```{r}
+plot(fit_ba, plotfun = "ac",
+     pars = c("omega_0"))
+```
+
+```{r}
+plot(fit_ba, plotfun = "ac",
+     pars = c("omega"))
+```
+
+```{r}
+plot(fit_ba, plotfun = "ac",
+     pars = c("kappa_0"))
+```
+
+```{r}
+plot(fit_ba, plotfun = "ac",
+     pars = c("kappa"))
+```
+
+```{r}
+plot(fit_ba, plotfun = "trace",
+     pars = c("omega_0"))
+```
+
+```{r}
+plot(fit_ba, plotfun = "trace",
+     pars = c("omega"))
+```
+
+```{r}
+plot(fit_ba, plotfun = "trace",
+     pars = c("kappa_0"))
+```
+
+```{r}
+plot(fit_ba, plotfun = "trace",
+     pars = c("kappa"))
+```
+
+
+## Summarizing the model
+
+```{r}
+print(fit_ba, pars =  c("omega_0", "omega", "kappa_0", "kappa"))
+```
+
+Just a few of the $\theta$ parameters:
+
+```{r}
+print(fit_ba, pars = c("theta[1]", "theta[2]", "theta[3]",
+                       "theta[4]", "theta[5]", "theta[6]",
+                       "theta[7]", "theta[8]", "theta[9]"))
+```
+
+
+## Visualizing the model
+
+```{r}
+plot(fit_ba, pars = c("omega_0", "omega"))
+```
+
+```{r}
+plot(fit_ba, pars = c("kappa_0", "kappa"))
+```
+
+```{r}
+pairs(fit_ba, pars = c("omega_0", "kappa_0"))
+```
+
+```{r}
+pairs(fit_ba, pars = c("omega[1]", "omega[2]",
+                       "kappa[1]", "kappa[2]"))
+```
+
+
+## Exploring the prior
+
+```{stan, output.var = "ba_prior", cache = TRUE}
+data {
+  int<lower = 0> C;
+  int<lower = 0> S;
+  int<lower = 0> N[S];
+  int<lower = 0> y[S];
+  int<lower = 0> cats[S];
+}
+transformed data {
+  real<lower = 0> A_omega_0;
+  real<lower = 0> B_omega_0;
+  real<lower = 0> R_kappa_0;
+
+  A_omega_0 = 2;
+  B_omega_0 = 2;
+  R_kappa_0 = 1;
+}
+parameters {
+  vector<lower = 0, upper = 1>[S] theta;
+  vector<lower = 0, upper = 1>[C] omega;
+  vector<lower = 0>[C] kappa_minus_two;
+  real<lower = 0> kappa_minus_two_0;
+  real<lower = 0, upper = 1> omega_0;
+}
+transformed parameters {
+  real<lower = 2> kappa_0;
+  vector<lower = 2>[C] kappa;
+  real<lower = 0> a_0;
+  real<lower = 0> b_0;
+  vector<lower = 0>[C] a;
+  vector<lower = 0>[C] b;
+
+  kappa_0 = kappa_minus_two_0 + 2;
+  a_0 = omega_0 * (kappa_0 - 2) + 1;
+  b_0 = (1 - omega_0) * (kappa_0 - 2) + 1;
+  kappa = kappa_minus_two + 2;
+  a = omega .* (kappa - 2) + 1;
+  b = (1 - omega) .* (kappa - 2) + 1;
+}
+model {
+  omega_0 ~ beta(A_omega_0, B_omega_0);
+  kappa_minus_two_0 ~ exponential(R_kappa_0);
+  omega ~ beta(a_0, b_0);
+  kappa_minus_two ~ exponential(R_kappa_0);
+  theta ~ beta(a[cats], b[cats]);
+//  y ~ binomial(N, theta);
+}
+```
+
+```{r}
+set.seed(11111)
+fit_ba_prior <- sampling(ba_prior, data = stan_data, refresh = 0)
+```
+
+```{r}
+plot(fit_ba_prior, pars = c("omega_0", "omega"))
+```
+
+```{r}
+plot(fit_ba_prior, pars = c("kappa_0", "kappa"))
+```
+
+```{r}
+plot(fit_ba_prior, pars = c("theta[1]", "theta[2]", "theta[3]",
+                            "theta[4]", "theta[5]", "theta[6]",
+                            "theta[7]", "theta[8]", "theta[9]"))
+```
+
+```{r}
+plot(fit_ba_prior, plotfun = "hist", par = "theta[1]")
+```
+
+```{r}
+plot(fit_ba_prior, plotfun = "hist", par = "theta[2]")
+```
+
+They're all pretty much uniform from 0 to 1 as we'd expect without any data included.
+
+
+## Posterior predictive check
+
+Extract predicted values:
+
+```{r}
+samples_ba <- extract(fit_ba)
+y_rep <- samples_ba$y_rep
+```
+
+Graph values of $y$ against summaries of $y_{rep}$.
+
+Here's the first player (a pitcher):
+
+```{r}
+ppc_stat(y[1], as.matrix(y_rep[ , 1]))
+```
+
+Here's the 4th player (2nd baseman):
+
+```{r}
+ppc_stat(y[4], as.matrix(y_rep[ , 4]))
+```
+
+Here's the 8th player (1st baseman):
+
+```{r}
+ppc_stat(y[8], as.matrix(y_rep[ , 8]))
+```
+
+Here are the first nine players:
+
+```{r}
+ppc_intervals(y[1:9], y_rep[ , 1:9])
+```
+
+The posterior data distributions are basically lining up with the original data:
+
+```{r}
+ba_data[1:9, ]
+```
+
+For low values of `AtBats`, the variability is necessarily low because there are only so many values of `Hits` possible.
+
+There is some shrinkage visible. It would be more prominent for people with low values of `AtBats`. (Less data means the prior is more powerful.) For those with high `AtBats`, the data speaks loudly, so the posterior data draws are centered pretty much right at the data value.
+
+The following makes some comparisons between positions:
+
+```{r}
+pitchers <- samples_ba$omega[ , 1]
+catchers <- samples_ba$omega[ , 2]
+firstbase <- samples_ba$omega[ , 3]
+
+positions_df <- bind_cols(pitchers = pitchers,
+                          catchers = catchers,
+                          firstbase = firstbase)
+```
+
+```{r}
+ggpairs(positions_df, lower = list(continuous = "density"))
+```
+
+```{r}
+positions_df <- positions_df %>%
+  mutate(pitchers_catchers = pitchers - catchers,
+         catchers_firstbase = catchers - firstbase)
+```
+
+```{r}
+ggplot(positions_df, aes(x = pitchers_catchers)) + 
+  geom_histogram()
+```
+
+```{r}
+ggplot(positions_df, aes(x = catchers_firstbase)) + 
+  geom_histogram()
+```
+
+Here are some comparisons between individual players:
+
+```{r}
+players <- c("Kyle Blanks", "Bruce Chen",
+            "ShinSoo Choo", "Ichiro Suzuki")
+player_nums <- ba_data %>%
+  filter(Player %in% players) %>%
+  .$PlayerNumber
+player_nums
+```
+
+```{r}
+players_df <- as_tibble(samples_ba$theta[ , player_nums])
+colnames(players_df) <- players
+players_df
+```
+
+```{r}
+ggpairs(players_df, lower = list(continuous = "density"))
+```
+
+```{r}
+players_df <- players_df %>%
+  mutate(Blanks_Chen = `Kyle Blanks` - `Bruce Chen`,
+         Choo_Suzuki = `ShinSoo Choo` - `Ichiro Suzuki`)
+```
+
+```{r}
+ggplot(players_df, aes(Blanks_Chen)) +
+  geom_histogram()
+```
+
+```{r}
+ggplot(players_df, aes(Choo_Suzuki)) +
+  geom_histogram()
+```
+
+## ShinyStan
+
+Run the following code from the Console:
+
+```
+launch_shinystan(fit_ba)
+```
