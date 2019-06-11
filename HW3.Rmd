@@ -320,7 +320,7 @@ Please write up answer here.
 
 ###### (h).
 
-How do your results from part (h) compare to the results from uniform priors? Why do you expect that?
+How do your results from part (g) compare to the results from uniform priors? Why do you expect that?
 
 <div class = "answer">
 
