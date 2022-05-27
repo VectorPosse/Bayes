@@ -1,0 +1,409 @@
+---
+title: "Bayesian data analysis assignment"
+output: html_notebook
+---
+
+<!-- Please don't mess with the next few lines! -->
+<style>h5{font-size:2em;color:#0000FF}h6{font-size:1.5em;color:#0000FF}div.answer{margin-left:5%;border:1px solid #0000FF;border-left-width:10px;padding:25px} div.summary{background-color:rgba(30,144,255,0.1);border:3px double #0000FF;padding:25px}</style>
+<!-- Please don't mess with the previous few lines! -->
+
+
+## Preliminaries
+
+```{r, message = FALSE, warning = FALSE}
+library(tidyverse)
+library(rstan)
+library(bayesplot)
+library(MASS)
+library(broom)
+```
+
+
+##### Question 1
+
+Two-thirds of sushi restaurants are legit while one-third are sketchy. Even legit sushi restaurants serve bad sushi 10% of the time while even sketchy sushi restaurants serve good sushi 50% of the time. Suppose you try a new sushi restaurant not knowing whether it is legit or sketchy. If the sushi is good then what is the probability you are in a legit sushi restaurant?
+
+<div class = "answer">
+
+Please write up your answer here.
+
+</div>
+
+
+##### Question 2
+
+Solve Problem 3 from the `1_Discrete_Bayes_example` notes a different way: this time, do it sequentially by calculating the posterior probability from the first draw of a red ball and using that posterior as the prior for drawing the second red ball. (This is similar to the second solution of Problem 2 from those notes, but even easier. Since the sampling is done *with replacement*, the draws are independent, so the second draw is still out of 5 balls and the likelihood won't change from the first draw to the second.)
+
+Your answer should be in the form of two tables like the ones in `1_Discrete_Bayes_example`, one for the first red draw and one for the second. You can copy, paste, and modify the markdown to create those tables.
+
+<div class = "answer">
+
+Please write up your answer here.
+
+</div>
+
+
+##### Question 3
+
+Suppose that we wish to predict whether a given stock will issue a dividend this year ("Yes" or "No") based on $x$, last year's profit (in some unspecified units that don't matter for this problem). We examine a large number of companies and discover that the mean value of $x$ for companies that issued a dividend was $\bar{x} = 10$, while the mean for those that didn't was $\bar{x} = 0$. In addition, the standard deviation of $x$ for these two sets of companies was $\sigma = 6$. Finally, 80% of companies issued dividends. Assuming that $x$ follows a normal distribution, **predict the probability that a company will issue a dividend this year given that its profit was $x = 4$ last year.**
+
+We'll use Bayes's Theorem to solve this problem. The parameter $\theta$ is a discrete parameter that can be either $Y$ or $N$ (for "Yes" or "No") representing whether a stock issues a dividend or not.
+
+Since the process is a little involved, we'll break it down into easy-to-digest chunks. Make sure you're clear on each step before moving onto the next.
+
+###### (a).
+
+Write down a contextually meaningful interpretation of the mathematical expression $p(\theta = Y \mid x = 4)$. (This is the posterior that we need to calculate.)
+
+<div class = "answer">
+
+Please write up your answer here.
+
+</div>
+
+###### (b).
+
+Write down a contextually meaningful interpretation of the prior $p(\theta = Y)$.
+
+<div class = "answer">
+
+Please write up your answer here.
+
+</div>
+
+###### (c).
+
+According to the information given in the problem statement, what is the value of the prior $p(\theta = Y)$? Store this value in a variable called `prior`.
+
+<div class = "answer">
+
+```{r}
+# Uncomment the lines below and replace the question mark to
+# store the value of the prior in a variable called prior.
+
+#prior <- ?
+#prior
+```
+
+</div>
+
+###### (d).
+
+Write down a contextually meaningful interpretation of the likelihood $p(x = 4 \mid \theta = Y)$.
+
+<div class = "answer">
+
+Please write up your answer here.
+
+</div>
+
+###### (e).
+
+To calculate the likelihood $p(x = 4 \mid \theta = Y)$, we recall that last year's profits for companies that issue dividends are distributed according to the normal model $N(10, 6)$. The general formula for a normal model is
+
+$$\frac{1}{\sigma \sqrt{ 2 \pi}}e^{-(x - \mu)^{2}/2\sigma^{2}}$$
+Plug in all the known values to obtain a value for the likelihood. The R command for the square root is `sqrt`. The number $\pi$ is stored as `pi`. Powers are computed using the caret `^` except the exponential function, which uses `exp`.  For example, $e^{2\sqrt{1 + \pi^{2}}}$ would be calculated using the R code `exp(2 * sqrt(1 + pi^2))`. Be careful with parentheses and order of operations!
+
+Store your answer in a variable called `likelihood`. (Hint: the answer should be 0.04032845)
+
+<div class = "answer">
+
+```{r}
+# Uncomment the lines below and replace the question mark to
+# evaluate the normal model N(10, 6) at x = 4
+# and store the value in a variable called likelihood.
+
+#likelihood = ?
+#likelihood
+```
+
+</div>
+
+###### (f).
+
+The denominator of Bayes's Theorem (the "evidence") is
+
+$$\sum_{\theta} p(\theta) p(x \mid \theta).$$
+
+In this problem, the sum is only two terms, corresponding to the two possible values of $\theta$ ($Y$ or $N$). So it looks like the following:
+
+$$p(\theta = Y) p(x = 4 \mid \theta = Y) + p(\theta = N) p(x = 4 \mid \theta = N).$$
+
+You already know the first term of the sum $p(\theta = Y) p(x = 4 \mid \theta = Y)$. (This is just `prior * likelihood`.)
+
+What is the value of $p(\theta = N)$? (You know $p(\theta = Y)$, so don't overthink this!)
+
+<div class = "answer">
+
+Please write up your answer here.
+
+</div>
+
+###### (g).
+
+To compute $p(x = 4 \mid \theta = N)$?, we'll do something very similar to what we did to compute the likelihood in Part (e). But now the normal model changes from $N(10, 6)$ to $N(0, 6)$. Why?
+
+<div class = "answer">
+
+Please write up your answer here.
+
+</div>
+
+###### (h).
+
+Using the normal model $N(0, 6)$, compute $p(x = 4 \mid \theta = N)$.
+
+<div class = "answer">
+
+```{r}
+# Evaluate the normal model N(0, 6) at x = 4.
+```
+
+</div>
+
+###### (i).
+
+Put parts (f), (g), and (h) all together now to compute the denominator for Bayes's Theorem:
+
+$$p(\theta = Y) p(x = 4 \mid \theta = Y) + p(\theta = N) p(x = 4 \mid \theta = N).$$
+
+Store your answer in a variable called `evidence`.
+
+<div class = "answer">
+
+```{r}
+# Uncomment the lines below and replace the question mark to
+# evaluate the denominator for Bayes's Theorem (the evidence)
+# and store the value in a variable called evidence.
+
+#evidence <- ? 
+#evidence
+```
+
+</div>
+
+###### (j).
+
+If everything worked correctly, the following code should compute the correct posterior probability:
+
+```{r}
+# Uncomment the lines below to calculate and report the posterior.
+
+#posterior <- prior * likelihood / evidence
+#posterior
+```
+
+The answer should be 0.7518525. (If you didn't get that, go back and check your work *carefully*!) State this result as a conclusion in the context of the original problem.
+
+<div class = "answer">
+
+Please write up your answer here.
+
+</div>
+
+
+##### Question 4
+
+From the `cats` data, consider a relationship in which the heart weight of cats (in grams) is predicted from their body weight (in kilograms).
+
+Before we do inference, let's prepare the data by mean-centering the explanatory variable. This will ensure that the intercept is interpretable. (The value of the intercept will be the predicted heart weight when the body weight is average.)
+
+```{r}
+cats2 <- cats %>%
+    mutate(Bwt_mc = Bwt - mean(Bwt))
+str(cats2)
+```
+
+We store the data in a list:
+
+```{r}
+N <- NROW(cats2)
+y <- cats2$Hwt
+x <- cats2$Bwt_mc
+cat_data <- list(N = N, y = y, x = x)
+str(cat_data)
+```
+
+The following Stan code builds a simple linear regression model on the data. The way it works is that the parameters (intercept, slope, and standard error of the residuals) are incorporated into a likelihood function that is a normal distribution. For a given value of `x`, the predicted `y` value on the line is `beta0 + beta1 * x`, and then the data values are distributed normally around the line (with standard deviation `sigma`).
+
+There is no prior specified. Stan, by default, will assume a uniform prior on any parameters for which a prior isn't explicitly given. So `beta0` and `beta1` are uniform on the entire real number line $(-\infty, \infty)$ and `sigma` is uniform over the non-negative reals $[0, \infty)$ (due to the `<lower = 0>` bit.)^[All this should make the mathematically-inclined feel a bit woozy; what does a uniform probability distribution look like over the real number line or even half of the number line? What is its height so that the area under a constant curve is one? Answer: this is impossible, so these uniform priors aren't *proper*.] More on this issue in a later question.
+
+```{stan, output.var = "cat_stan", cache = TRUE}
+data {
+  int<lower = 0> N; // sample size
+  vector[N] x;      // explanatory variable
+  vector[N] y;      // response variable
+}
+parameters {
+  real beta0;               // intercept
+  real beta1;               // slope
+  real<lower = 0> sigma;    // residual errors
+}
+model {
+  y ~ normal(beta0 + beta1 * x, sigma); // likelihood
+}
+generated quantities {
+  real y_rep[N];
+  
+  for (n in 1:N) {
+    y_rep[n] = normal_rng(beta0 + beta1 * x[n], sigma);
+  }
+}
+```
+
+```{r, cache = TRUE}
+set.seed(12345)
+fit_cat_stan <- sampling(cat_stan, data = cat_data,
+                         refresh = 0)
+```
+
+###### (a).
+
+Use the `print` method on `fit_cat_stan` to print the summary statistics for the sampled values of the intercept `beta0`, slope `beta1`, and residual error `sigma` of `fit_cat_stan`.
+
+<div class = "answer">
+
+```{r}
+# Add code here
+```
+
+</div>
+
+###### (b).
+
+Use the `plot` method on `fit_cat_stan` with `plotfun = "dens"` to plot the simulated posterior distributions of the regression parameters (`beta0`, `beta1`, `sigma`).
+
+<div class = "answer">
+
+```{r}
+# Add code here
+```
+
+</div>
+
+###### (c).
+
+In a few sentences, interpret the output as it relates to the linear regression model you're trying to find.
+
+<div class = "answer">
+
+Please write up your answer here.
+
+</div>
+
+###### (d).
+
+Run a standard linear regression using `lm`. Is the result consistent with the Bayesian results above? (Be sure to address all three parameters, $\beta_{0}$, $\beta_{1}$, and $\sigma$. Recall that info about $\beta_{0}$ and $\beta_{1}$ will be in the `tidy` output and info about $\sigma$ will be in the `glance` output.)
+
+<div class = "answer">
+
+```{r}
+# Add code here
+```
+
+Please write up your answer here.
+
+</div>
+
+###### (e).
+
+As explained earlier, since there are no priors specified in the model, the default in Stan is to use uniform priors. Explain why these priors are not sensible in the context of a linear regression model.
+
+<div class = "answer">
+
+Please write up your answer here.
+
+</div>
+
+###### (f).
+
+Here you will choose better priors. When choosing *informative priors*, it's considered cheating to look at the data---informative priors are supposed to come from substantive knowledge you already have before you collect data. (And you may or may not know anything about typical body weights and heart weights for cats.) Choosing *weakly informative priors* is a matter of finding a range of plausible values and finding a distribution that puts substantial probability in ranges even way beyond that. Such weakly informative priors will still be better than uniform priors.
+
+Run a new Stan model by adding some sensible prior distributions for the intercept and slope parameters where indicated. We'll use a `cauchy(0, 5)` prior for `sigma`. (Don't worry too much about why---the Cauchy distribution is commonly recommended as a weakly informative prior for standard deviations.) Remember that your `x` variable has been mean-centered, so that may affect your choice of prior.
+
+We'll also sample from the model in this step in a separate code chunk using the `sampling` function.
+
+<div class = "answer">
+
+```{stan, output.var = "cat_stan2", cache = TRUE}
+data {
+  int<lower = 0> N; // sample size
+  vector[N] x;      // explanatory variable
+  vector[N] y;      // response variable
+}
+parameters {
+  real beta0;               // intercept
+  real beta1;               // slope
+  real<lower = 0> sigma;    // residual errors
+}
+model {
+        // ADD PRIOR ON beta0
+        // ADD PRIOR ON beta1
+  sigma ~ cauchy(0, 5);   // prior on sigma
+  y ~ normal(beta0 + beta1 * x, sigma); // likelihood
+}
+generated quantities {
+  real y_rep[N];
+  
+  for (n in 1:N) {
+    y_rep[n] = normal_rng(beta0 + beta1 * x[n], sigma);
+  }
+}
+```
+
+```{r, cache = TRUE}
+set.seed(12345)
+fit_cat_stan2 <- sampling(cat_stan2, data = cat_data,
+                          refresh = 0)
+```
+
+</div>
+
+###### (g).
+
+Follow the same steps as above to print the posterior summary and visualize it.
+
+<div class = "answer">
+
+```{r}
+# Add code here
+```
+
+</div>
+
+###### (h).
+
+How do your results from part (g) compare to the results from uniform priors? Why do you expect that?
+
+<div class = "answer">
+
+Please write up your answer here.
+
+</div>
+
+###### (i).
+
+Once we've built the model, we can look at the posterior distribution and simulate fake data from the range of parameter values sampled. This is called the *posterior predictive distribution* because it predicts what new data drawn from our posterior would look like.
+
+This fake data should look a lot like our original data. Why? Because if the posterior is an accurate reflection of the "true" data-generating process we are seeking to uncover, then any data generated by that process should look similar to any other data generated by that process.
+
+Every iteration of Stan results in a set of possible values for each parameter of interest. The `generated quantities` block of the Stan model uses these parameter draws and a random number generator driven by a normal model (`normal_rng`) to select a set of possible y values that could result from those parameters. In this model, that means that each iteration of Stan will build a candidate regression line, and then use that line (along with some variability `sigma`) to simulate a bunch of fake data scattered around that line. The next iteration of Stan will draw a slightly different set of parameters, so this will give a different regression line which will give a slightly different set of fake data.
+
+Here is one particular visualization of the posterior predictive distribution. The horizontal axis shows the average of all the simulated y values for each original value of the explanatory variable. The vertical axis shows the actual y value corresponing to that same value of the explanatory variable.
+
+```{r}
+cat_samples <- extract(fit_cat_stan)
+y_rep <- cat_samples$y_rep
+ppc_scatter_avg(y, y_rep) +
+  xlim(5, 21) +
+  ylim(5, 21) +
+  coord_fixed()
+```
+
+How do you interpret this picture? What does this tell you about data simulated from the posterior distribution compared to the original data?
+
+<div class = "answer">
+
+Please write up your answer here.
+
+</div>

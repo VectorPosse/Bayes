@@ -8,29 +8,16 @@ output: html_notebook
 
 Stan is a platform for running statistical computations, especially Bayesian data analysis. The mechanism by which it works (Hamiltonian Markov Chain Monte Carlo) is sophisticated. Here we'll describe how to set up a model and compute a posterior distribution.
 
-We'll also see a nice dashboard that allows us to diagnose model fit and explore and visualize various properties of the posterior distribution.
-
 The first time you run the code chunks in this file, it will take a while. Be patient. I've included options and code that will allow Stan to bypass a lot of the work R has to do the second time around (and every time thereafter, as long as you're in the same R session).
 
 
 ## Preliminaries
 
-Before doing anything, you will need to run the following code at the Console. (In other words, copy and paste the following code into the Console and run it.) You only need to run this code once and Stan should work fine forever after that.
-
-```
-dotR <- file.path(Sys.getenv("HOME"), ".R")
-if (!file.exists(dotR)) dir.create(dotR)
-M <- file.path(dotR, "Makevars")
-if (!file.exists(M)) file.create(M)
-cat("CXX14 = g++ -std=c++1y -Wno-unused-variable -Wno-unused-function -fPIC", file = M, sep = "\n")
-```
-
 Load necessary packages:
 
-```{r, message = FALSE}
+```{r, message = FALSE, warning = FALSE}
 library(rstan)
-library(shinystan)
-library(sjstats)
+library(bayestestR)
 ```
 
 Stan will take a fair amount of time the first time it's run on a model. The following bit of code tells Stan not to recompile code that has already been compiled once so that it won't take so long after the first time.
@@ -146,7 +133,7 @@ The second line is the likelihood function. An event that consists of a success/
 
 Now we sample from the model using our data. (Since there are random processes in play, we'll set the seed to make our work reproducible.)
 
-```{r}
+```{r, cache = TRUE}
 set.seed(54321)
 fit_bin_unif <- sampling(bin_unif, data = stan_data)
 ```
@@ -185,15 +172,6 @@ The default option for `plot` gives you 80% and 95% credible intervals for our p
 ```{r}
 plot(fit_bin_unif)
 ```
-
-Note that these intervals are *not* highest density intervals (HDIs), but rather are computed using quantiles from the sampled values. If we want an HDI, we can use the `hdi` function from the `sjstats` package. The `prob` argument allows us to specify the percents we want. (The default for `hdi` is 90%.)
-
-```{r}
-hdi(fit_bin_unif, prob = c(0.8, 0.95))
-```
-
-Due to the relatively symmetric shape of our distribution, the posterior credible intervals from Stan and the HDIs match up pretty closely.
-
 
 The following is a "traceplot" showing the chains. You use this to diagnose chain mixing.
 
@@ -266,7 +244,7 @@ model {
 
 For convenience, we'll also tell the `sampling` function not to print out all the information about processing the chains by using the argument `refresh = 0`.
 
-```{r}
+```{r, cache = TRUE}
 set.seed(54321)
 fit_bin_unif_prior <- sampling(bin_unif_prior,
                                data = stan_data,
@@ -325,7 +303,7 @@ model {
 
 Once again, we sample from the model using our data. We'll also tell the `sampling` function not to print out all the information about processing the chains by using the argument `refresh = 0`.
 
-```{r}
+```{r, cache = TRUE}
 set.seed(54321)
 fit_bin_norm1 <- sampling(bin_norm1,
                           data = stan_data,
@@ -337,7 +315,7 @@ fit_bin_norm1
 ```
 
 ```{r}
-stan_dens(fit_bin_norm1) +
+plot(fit_bin_norm1, plotfun = "dens") +
     xlim(0,1)
 ```
 
@@ -366,7 +344,8 @@ model {
 }
 ```
 
-```{r}
+```{r, cache = TRUE}
+set.seed(54321)
 fit_bin_norm2 <- sampling(bin_norm2,
                           data = stan_data,
                           refresh = 0)
@@ -377,7 +356,7 @@ fit_bin_norm2
 ```
 
 ```{r}
-stan_dens(fit_bin_norm2) +
+plot(fit_bin_norm2, plotfun = "dens") +
     xlim(0,1)
 ```
 
@@ -399,7 +378,7 @@ stan_data_small <- list(N = N2, y = y2)
 
 Let's apply the three models already developed to this new data. Note that we do not need to run any more Stan code. This is just sampling from existing models using new data.
 
-```{r}
+```{r, cache = TRUE}
 set.seed(54321)
 fit_bin_unif_small <- sampling(bin_unif,
                                data = stan_data_small,
@@ -419,8 +398,8 @@ fit_bin_unif_small
 ```
 
 ```{r}
-stan_dens(fit_bin_unif_small) +
-    xlim(0, 1)
+plot(fit_bin_unif_small, plotfun = "dens") +
+    xlim(0,1)
 ```
 
 ```{r}
@@ -428,8 +407,8 @@ fit_bin_norm1_small
 ```
 
 ```{r}
-stan_dens(fit_bin_norm1_small) +
-    xlim(0, 1)
+plot(fit_bin_norm1_small, plotfun = "dens") +
+    xlim(0,1)
 ```
 
 ```{r}
@@ -437,8 +416,8 @@ fit_bin_norm2_small
 ```
 
 ```{r}
-stan_dens(fit_bin_norm2_small) +
-    xlim(0, 1)
+plot(fit_bin_norm2_small, plotfun = "dens") +
+    xlim(0,1)
 ```
 
 
@@ -446,9 +425,10 @@ stan_dens(fit_bin_norm2_small) +
 
 Shiny is a package that makes interactive web apps and dashboards for R. The Stan developers have created a beautiful dashboard that can be used to diagnose model fit and explore/visualize various properties of the posterior distribution.
 
-In an R notebook, this won't do anything. So go to the Console, and type the following:
+Unfortunately, the server configuration does not allow us to open an external tool in a new window, so this only works if you are using Stan installed on your own device. If that is the case, you can type the following:
 
 ```
+library(shinystan)
 launch_shinystan(fit_bin_norm1)
 ```
 
