@@ -15,7 +15,7 @@ The first time you run the code chunks in this file, it will take a while. Be pa
 
 Load necessary packages:
 
-```{r, message = FALSE, warning = FALSE}
+```{r}
 library(rstan)
 library(bayestestR)
 ```
