@@ -8,9 +8,9 @@ output: html_notebook
 
 Load necessary libraries.
 
-```{r, message = FALSE}
+```{r}
 # Load packages
-library(ggplot2)
+library(tidyverse)
 ```
 
 We define the `bayes_plot_continuous` function that we can use to plot priors, likelihoods, and posteriors.
@@ -42,12 +42,16 @@ bayes_plot_continuous <- function(prior, likelihood, from, to) {
         }
     
     # Plot the posterior function.
-    posterior_plot <- ggplot(NULL, aes(x = x, color = col, linetype = col)) +
-        stat_function(data = data.frame(x = c(from, to), col = factor(1)),
+    posterior_plot <- ggplot(NULL, aes(x = x, color = col, 
+                                       linetype = col)) +
+        stat_function(data = tibble(x = c(from, to), 
+                                        col = factor(1)),
                       fun = prior) +
-        stat_function(data = data.frame(x = c(from, to), col = factor(2)),
+        stat_function(data = tibble(x = c(from, to), 
+                                        col = factor(2)),
                       fun = posterior) +
-        stat_function(data = data.frame(x = c(from, to), col = factor(3)),
+        stat_function(data = tibble(x = c(from, to), 
+                                        col = factor(3)),
                       fun = likelihood_scaled) +
         theme_bw() +
         theme(panel.grid = element_blank()) +
@@ -77,16 +81,20 @@ The family of models known as beta distributions will fix both these problems.
 
 Beta distributions, denoted $beta(\theta \mid a, b)$, depend on two positive real numbers that we will call $a$ and $b$. These are often called "shape" parameters, and their interpretation will be explained later. The probability density function for the beta distribution is given by the following formula, defined for values of $\theta$ between 0 and 1:
 
-$$p(\theta) = beta(\theta \mid a, b) = \frac{\theta^{(a - 1)} \left(1 - \theta\right)^{(b - 1)}}{B(a, b)}.$$
+$$
+p(\theta) = beta(\theta \mid a, b) = \frac{\theta^{(a - 1)} \left(1 - \theta\right)^{(b - 1)}}{B(a, b)}.
+$$
 
 Don't worry about the denominator $B(a, b)$. It's just a constant that ensures that the total area under the curve is 1 so that we really do have a probability density function. (It's similar to the term $\frac{1}{\sigma \sqrt{2 \pi}}$ in the formula for the normal distribution.) All the action is in the numerator. To emphasize that, we will often write
-$$p(\theta) \propto \theta^{(a - 1)} \left(1 - \theta\right)^{(b - 1)}$$
+$$
+p(\theta) \propto \theta^{(a - 1)} \left(1 - \theta\right)^{(b - 1)},
+$$
 using the "proportional to" symbol and ignore the normalizing constant.^[It's minorly annoying that the exponents are $a - 1$ and $b - 1$ instead of just $a$ and $b$. There are places where that convention simplifies the math, but we won't need to worry about it here.]
 
 Here are some plots for various values of $a$ and $b$. Pay attention to how the values of $a$ and $b$ affect the shape of the function.
 
 ```{r}
-ggplot(data.frame(x = c(0, 1)), aes(x)) +
+ggplot(tibble(x = c(0, 1)), aes(x)) +
     theme_bw() +
     theme(panel.grid = element_blank()) +
     labs(title = "Beta priors",
@@ -108,7 +116,7 @@ ggplot(data.frame(x = c(0, 1)), aes(x)) +
 Note that $beta(\theta \mid 1, 1)$ is a uniform distribution. If $a = b$, then the beta distribution is symmetric with less spread as $a$ and $b$ increase.
 
 ```{r}
-ggplot(data.frame(x = c(0, 1)), aes(x)) +
+ggplot(tibble(x = c(0, 1)), aes(x)) +
     theme_bw() +
     theme(panel.grid = element_blank()) +
     labs(title = "Beta priors",
@@ -130,7 +138,7 @@ ggplot(data.frame(x = c(0, 1)), aes(x)) +
 Beta distributions with large $a$ and $b = 1$ are severely left-skewed.
 
 ```{r}
-ggplot(data.frame(x = c(0, 1)), aes(x)) +
+ggplot(tibble(x = c(0, 1)), aes(x)) +
     theme_bw() +
     theme(panel.grid = element_blank()) +
     labs(title = "Beta priors",
@@ -152,7 +160,7 @@ ggplot(data.frame(x = c(0, 1)), aes(x)) +
 These are the same as above, but exchanging the roles of $a$ and $b$ resulting in severely right-skewed distributions.
 
 ```{r}
-ggplot(data.frame(x = c(0, 1)), aes(x)) +
+ggplot(tibble(x = c(0, 1)), aes(x)) +
     theme_bw() +
     theme(panel.grid = element_blank()) +
     labs(title = "Beta priors",
@@ -176,9 +184,10 @@ ggplot(data.frame(x = c(0, 1)), aes(x)) +
 
 When $a + b$ is constant, the spread is about the same, but the skewness changes.
 
+There is no reason the values of $a$ and $b$ must be integers. Here is a particular weird example of a bimodal distribution created from small values of $a$ and $b$.
 
 ```{r}
-ggplot(data.frame(x = c(0, 1)), aes(x)) +
+ggplot(tibble(x = c(0, 1)), aes(x)) +
     theme_bw() +
     theme(panel.grid = element_blank()) +
     labs(title = "Beta priors",
@@ -191,25 +200,27 @@ ggplot(data.frame(x = c(0, 1)), aes(x)) +
                        breaks =  c("(0.1, 0.1)"))
 ```
 
-There is no reason the values of $a$ and $b$ must be integers. Here is a particular weird example of a bimodal distribution created from small values of $a$ and $b$.
-
 
 ## Binomial likelihood
 
 We return to the example of binomial data from the previous set of notes: in 18 trials, we observe 12 successes. The likelihood function is expressed as follows:
 
-$$p(x = 12 \mid \theta) \propto \theta^{12} (1 - \theta)^{6}$$
+$$
+p(x = 12 \mid \theta) \propto \theta^{12} (1 - \theta)^{6}.
+$$
 
 The code below defines the binomial likelihood function for 12 successes in a sample of size 18.
 
 ```{r}
-likelihood1 <- function(theta) { dbinom(x = 12, size = 18, prob = theta) }
+likelihood1 <- function(theta) {
+    dbinom(x = 12, size = 18, prob = theta)
+    }
 ```
 
 Look at a plot of this likelihood function:
 
 ```{r}
-likelihood1_plot <- ggplot(data.frame(x = c(0,1)), aes(x = x)) +
+likelihood1_plot <- ggplot(tibble(x = c(0,1)), aes(x = x)) +
     stat_function(fun = likelihood1) +
     theme_bw() +
     theme(panel.grid = element_blank()) +
@@ -224,7 +235,9 @@ likelihood1_plot
 
 Recall that the posterior density function is proportional to the prior times the likelihood:
 
-$$p(\theta \mid x) \propto p(\theta) p(x \mid \theta).$$
+$$
+p(\theta \mid x) \propto p(\theta) p(x \mid \theta).
+$$
 
 If we substitute the formula for the beta distribution for the prior and the formula for the binomial distribution for the likelihood, we get the following posterior:
 
@@ -257,7 +270,7 @@ bayes_plot_continuous(prior1, likelihood1, from = 0, to = 1)
 So it's no surprise that the posterior is just the scaled likelihood. The bigger surprise is that the posterior is simply $beta(\theta \mid 13, 7)$:
 
 ```{r}
-ggplot(data.frame(x = c(0, 1)), aes(x)) +
+ggplot(tibble(x = c(0, 1)), aes(x)) +
     theme_bw() +
     theme(panel.grid = element_blank()) +
     stat_function(fun = dbeta, args = list(shape1 = 13, shape2 = 7),
@@ -277,7 +290,7 @@ bayes_plot_continuous(prior2, likelihood1, from = 0, to = 1)
 The posterior is just $beta(\theta \mid 17, 11)$:
 
 ```{r}
-ggplot(data.frame(x = c(0, 1)), aes(x)) +
+ggplot(tibble(x = c(0, 1)), aes(x)) +
     theme_bw() +
     theme(panel.grid = element_blank()) +
     labs(title = "Beta prior",
@@ -318,11 +331,15 @@ Why the mode instead of the mean? Since the beta distribution is usually skewed,
 
 The mode $\omega$ of a beta distribution (which only makes sense if $a, b > 1$) is given by
 
-$$\omega = \frac{a - 1}{a + b - 2}.$$
+$$
+\omega = \frac{a - 1}{a + b - 2}.
+$$
 
 Now this one equation is not enough to solve uniquely for $a$ and $b$. One more equation we can use is the *concentration* $\kappa$:
 
-$$\kappa = a + b$$.
+$$
+\kappa = a + b.
+$$
 
 Remember that $a + b$ is intuitively like a "prior sample size". (Technically, the equivalent prior sample size was $a + b - 2$, but it's close.) So we can pick $\kappa$ to represent the strength of our prior convictions.
 
@@ -352,7 +369,7 @@ b1
 Let's graph that prior and see if it gives us the spread we want:
 
 ```{r}
-ggplot(data.frame(x = c(0, 1)), aes(x)) +
+ggplot(tibble(x = c(0, 1)), aes(x)) +
     theme_bw() +
     theme(panel.grid = element_blank()) +
     stat_function(fun = dbeta, args = list(shape1 = 3, shape2 = 7),
@@ -375,7 +392,7 @@ b2
 ```
 
 ```{r}
-ggplot(data.frame(x = c(0, 1)), aes(x)) +
+ggplot(tibble(x = c(0, 1)), aes(x)) +
     theme_bw() +
     theme(panel.grid = element_blank()) +
     stat_function(fun = dbeta, args = list(shape1 = 5.5, shape2 = 14.5),

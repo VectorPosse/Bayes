@@ -8,9 +8,9 @@ output: html_notebook
 
 Load necessary libraries.
 
-```{r, message = FALSE}
+```{r}
 # Load packages
-library(ggplot2)
+library(tidyverse)
 library(triangle) # for the triangular distribution
 ```
 
@@ -48,12 +48,16 @@ bayes_plot_continuous <- function(prior, likelihood, from, to) {
         }
     
     # Plot the posterior function.
-    posterior_plot <- ggplot(NULL, aes(x = x, color = col, linetype = col)) +
-        stat_function(data = data.frame(x = c(from, to), col = factor(1)),
+    posterior_plot <- ggplot(NULL, aes(x = x, color = col,
+                                       linetype = col)) +
+        stat_function(data = tibble(x = c(from, to), 
+                                        col = factor(1)),
                       fun = prior) +
-        stat_function(data = data.frame(x = c(from, to), col = factor(2)),
+        stat_function(data = tibble(x = c(from, to), 
+                                        col = factor(2)),
                       fun = posterior) +
-        stat_function(data = data.frame(x = c(from, to), col = factor(3)),
+        stat_function(data = tibble(x = c(from, to), 
+                                        col = factor(3)),
                       fun = likelihood_scaled) +
         theme_bw() +
         theme(panel.grid = element_blank()) +
@@ -79,7 +83,10 @@ bayes_plot_continuous <- function(prior, likelihood, from, to) {
 
 Suppose we have binomial data. In 18 trials, we observe 12 successes. The likelihood function is expressed as follows:
 
-$$p(x = 12 \mid \theta) \propto \theta^{12} (1 - \theta)^{6}$$
+$$
+p(x = 12 \mid \theta) \propto \theta^{12} (1 - \theta)^{6}.
+$$
+
 The parameter $\theta$ can take on any real number value between zero and one. Therefore, any probability distribution or likelihood function involving $\theta$ must be expressed as a continuous function (as opposed to, say, a table of values like for a discrete random variable).
 
 The code below defines the binomial likelihood function for 12 successes in a sample of size 18.
@@ -91,7 +98,7 @@ likelihood1 <- function(theta) { theta ^ 12 * (1 - theta) ^ 6 }
 Look at a plot of this likelihood function:
 
 ```{r}
-likelihood1_plot <- ggplot(data.frame(x = c(0,1)), aes(x = x)) +
+likelihood1_plot <- ggplot(tibble(x = c(0, 1)), aes(x = x)) +
     stat_function(fun = likelihood1) +
     theme_bw() +
     theme(panel.grid = element_blank()) +
@@ -114,11 +121,15 @@ What this shows is for each possible value of $\theta$, what is the probability 
 
 Assume a uniform prior:
 
-$$p(\theta) = 1.$$
+$$
+p(\theta) = 1.
+$$
 
 Then the posterior is
 
-$$p(\theta \mid x) \propto p(\theta) p(x \mid \theta) = p(x \mid \theta).$$
+$$
+p(\theta \mid x) \propto p(\theta) p(x \mid \theta) = p(x \mid \theta).
+$$
 
 In this case, the posterior has exactly the same shape as the likelihood. Again, the likelihood function is not a probability density function---its area is not one. But we can scale the likelihood function by dividing it by its area, and now it will have area one. One can see in the graph that with a uniform prior, the posterior is just the scaled likelihood function. With no prior information, the data is our best guess for the posterior.
 
@@ -132,7 +143,9 @@ bayes_plot_continuous(prior1, likelihood1, 0, 1)
 
 Suppose we now choose a prior that is relatively far from the data, say, a normal distribution centered at 0.3 with standard deviation 0.1:
 
-$$\theta \sim N(0.3, 0.1).$$
+$$
+\theta \sim N(0.3, 0.1).
+$$
 
 The posterior is a compromise between the prior and the data, so if the prior and data are far apart, the posterior will end up being in between them somewhere.
 
@@ -146,7 +159,9 @@ bayes_plot_continuous(prior2, likelihood1, 0, 1)
 
 What about a prior that is close to the data? Something like
 
-$$\theta \sim N(0.7, 0.1).$$
+$$
+\theta \sim N(0.7, 0.1).
+$$
 
 In this case, the data and the prior reinforce each other.
 
