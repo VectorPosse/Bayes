@@ -3,6 +3,10 @@ title: "1. Discrete Bayes example"
 output: html_notebook
 ---
 
+```{r}
+library(tidyverse)
+```
+
 (Adapted from Bolstad, *Introduction to Bayesian Statistics*.)
 
 An urn contains 5 balls, each of which is either red or green. Let $\theta$ (the unknown parameter) be the total number of red balls and assume that each of the six possible values of $\theta$ (0, 1, 2, 3, 4, or 5) is *a priori* equally likely. (Another way to say this is that we have a *uniform* prior, which represents the absence of prior information.)
@@ -16,11 +20,15 @@ Suppose we draw out a red ball. What is the posterior probability distribution o
 
 Recall Bayes's Theorem:
 
-$$p(\theta \mid x) = \frac{p(\theta) p(x \mid \theta)}{p(x)}.$$
+$$
+p(\theta \mid x) = \frac{p(\theta) p(x \mid \theta)}{p(x)}.
+$$
 
 Using the so-called "law of total probability", we expand the denominator:
 
-$$p(\theta \mid x) = \frac{p(\theta) p(x \mid \theta)}{\sum_{\theta} p(\theta) p(x \mid \theta)}.$$
+$$
+p(\theta \mid x) = \frac{p(\theta) p(x \mid \theta)}{\sum_{\theta} p(\theta) p(x \mid \theta)}.
+$$
 
 The sum is taken over all possible values of $\theta$. (Remember that we treat $x$ as a constant.)
 
@@ -32,7 +40,9 @@ For example, if $\theta$ were zero, then there would be no red balls at all in t
 
 It is convenient to organize our work into a table, shown below. The first column contains the possible values of the parameter. The second column records the prior probabilities. (These should add up to 1.) The third column is the likelihood function. (These will generally not add up to 1.) We multiply the prior times the likelihood in the fourth column. Then by scaling the fourth column appropriately (dividing by the "evidence"), we get the final column, the posterior. The scaling factor in Bayes's Theorem is
 
-$$p(x) = \sum_{\theta} p(\theta) p(x \mid \theta).$$
+$$
+p(x) = \sum_{\theta} p(\theta) p(x \mid \theta).
+$$
 In other words, we can get this scaling factor by adding up the fourth column containing the values of the prior times the likelihood. (In the following table, that sum is $0 + 1/30 + 2/30 + 3/30 + 4/30 + 5/30 = 15/30 =  1/2$.) Therefore, the posterior probabilities are the values from the fourth column divided by $1/2$ (equivalently, multiplied by 2).
 
 
@@ -54,17 +64,18 @@ We can plot the posterior probability distribution as follows. First, we store t
 ```{r}
 theta <- 0:5
 post_prob <- c(0, 1/15, 2/15, 3/15, 4/15, 5/15)
-plot_df <- data.frame(theta, post_prob)
-plot_df
+plot_data <- tibble(theta, post_prob)
+plot_data
 ```
 
 Then we create a "lollipop" plot (which is common for probability mass functions).
 
 ```{r}
 library(ggplot2)
-ggplot(plot_df, aes(y = post_prob, x = theta)) +
+ggplot(plot_data, aes(y = post_prob, x = theta)) +
     geom_point() +
-    geom_segment(aes(y = 0, yend = post_prob, x = theta, xend = theta)) +
+    geom_segment(aes(y = 0, yend = post_prob,
+                     x = theta, xend = theta)) +
     labs(x = expression(theta),
          y = "Posterior probability")
 ```
@@ -77,11 +88,11 @@ bayes_plot_discrete <- function(theta, prior, likelihood) {
     post_prob <- prior * likelihood / ( sum(prior * likelihood) )
     
     # Gather all variables into a data frame
-    plot_df <- data.frame(theta, post_prob)
+    plot_data <- data.frame(theta, post_prob)
     
     #Create lollipop plot
     posterior_plot <-
-        ggplot(plot_df, aes(y = post_prob, x = theta)) +
+        ggplot(plot_data, aes(y = post_prob, x = theta)) +
             geom_point() +
             geom_segment(aes(y = 0, yend = post_prob,
                              x = theta, xend = theta)) +
@@ -98,7 +109,9 @@ Let's test out the function. We've already defined `theta`, so we just need valu
 ```{r}
 prior <- rep(1/6, 6)
 likelihood1 <- c(0, 1/5, 2/5, 3/5, 4/5, 5/5)
-bayes_plot_discrete(theta = theta, prior = prior, likelihood = likelihood1)
+bayes_plot_discrete(theta = theta,
+                    prior = prior,
+                    likelihood = likelihood1)
 ```
 
 
@@ -114,15 +127,23 @@ All that changes here is the likelihood. Note that $\theta = 0$ and $\theta = 1$
 
 If $\theta = 2$, then there is a $2/5$ chance of red on the first draw. Then, with one remaining red ball left in the urn, there is a $1/4$ chance of drawing the second red ball.
 
-$$p(x \mid \theta = 2) = (2/5)(1/4) = 1/10$$
+$$
+p(x \mid \theta = 2) = (2/5)(1/4) = 1/10.
+$$
 
 (To make the calculations easier, we'll simplify fractions this time.)
 
 The remaining calculations are similar:
 
-$$p(x \mid \theta = 3) = (3/5)(2/4) = 3/10$$
-$$p(x \mid \theta = 4) = (4/5)(3/4) = 6/10$$
-$$p(x \mid \theta = 5) = (5/5)(4/4) = 1$$
+$$
+p(x \mid \theta = 3) = (3/5)(2/4) = 3/10.
+$$
+$$
+p(x \mid \theta = 4) = (4/5)(3/4) = 6/10.
+$$
+$$
+p(x \mid \theta = 5) = (5/5)(4/4) = 1.
+$$
 
 Here's the full table with all the calculations:
 
@@ -141,7 +162,9 @@ We can plot this using our `bayes_plot_discrete` function. The parameter values 
 
 ```{r}
 likelihood2 <- c(0, 0, 1/10, 3/10, 6/10, 1)
-bayes_plot_discrete(theta = theta, prior = prior, likelihood = likelihood2)
+bayes_plot_discrete(theta = theta,
+                    prior = prior,
+                    likelihood = likelihood2)
 ```
 
 
@@ -151,11 +174,21 @@ Bayes's Theorem works *sequentially*. What this means is that we can gather some
 
 To illustrate how this works, first work out the likelihood function for drawing one red ball from an urn with *four* balls. Now $\theta$ can take values from 0 through 4.
 
-$$p(x \mid \theta = 0) = 0$$
-$$p(x \mid \theta = 1) = 1/4$$
-$$p(x \mid \theta = 2) = 2/4$$
-$$p(x \mid \theta = 3) = 3/4$$
-$$p(x \mid \theta = 4) = 4/4$$
+$$
+p(x \mid \theta = 0) = 0.
+$$
+$$
+p(x \mid \theta = 1) = 1/4.
+$$
+$$
+p(x \mid \theta = 2) = 2/4.
+$$
+$$
+p(x \mid \theta = 3) = 3/4.
+$$
+$$
+p(x \mid \theta = 4) = 4/4.
+$$
 
 Now we copy the posterior from Problem 1 into the prior column here. We account for the probabilities after the first draw by starting with those as our new distribution prior to the second draw. Then we fill out the rest of the table except that we ignore the zero row from Problem 1. (If we had no red balls for the first draw, we never would arrive here at the second draw.) Also, we have shifted the values up one row. For example, if there were three red balls among the original five ($\theta = 3$), then after the first draw, we would be looking for the probability associated with two red balls among the remaining four ($\theta = 2$).
 
@@ -182,11 +215,18 @@ If we draw two red balls *with replacement*, what is the posterior probability d
 
 Since the draws are now independent (the first draw will no longer affect the second draw), the likelihood changes. Skipping over the easy case where $\theta$ is zero,
 
-$$p(x \mid \theta = 1) = (1/5)(1/5) = 1/25$$
-
-$$p(x \mid \theta = 2) = (2/5)(2/5) = 4/25$$
-$$p(x \mid \theta = 3) = (3/5)(3/5) = 9/25$$
-$$p(x \mid \theta = 4) = (4/5)(4/5) = 16/25$$
+$$
+p(x \mid \theta = 1) = (1/5)(1/5) = 1/25.
+$$
+$$
+p(x \mid \theta = 2) = (2/5)(2/5) = 4/25.
+$$
+$$
+p(x \mid \theta = 3) = (3/5)(3/5) = 9/25.
+$$
+$$
+p(x \mid \theta = 4) = (4/5)(4/5) = 16/25.
+$$
 (The case $\theta = 5$ should also be obvious, right?)
 
 Here is the table. The scaling factor is $1/150 + 2/75 + 3/50 + 8/75 + 1/6 = 11/305$.
@@ -206,7 +246,9 @@ We plot the posterior probability mass function as before.
 
 ```{r}
 likelihood3 <- c(0, 1/25, 4/25, 9/25, 16/25, 1)
-bayes_plot_discrete(theta = theta, prior = prior, likelihood = likelihood3)
+bayes_plot_discrete(theta = theta,
+                    prior = prior,
+                    likelihood = likelihood3)
 ```
 
 
