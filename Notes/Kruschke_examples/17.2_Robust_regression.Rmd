@@ -8,14 +8,14 @@ output: html_notebook
 
 This is code for Section 17.2 of Kruschke using a Student t noise distribution. Other than that change, this document is identical to the one from section 7.1.
 
-Make sure that the two files "WtHtData30.csv" and "WtHtData300.csv" are in your project directory.
+Make sure that the two files "HtWtData30.csv" and "HtWtData300.csv" are in your project directory.
 
 
 ## Preliminaries
 
 Load necessary packages:
 
-```{r, message = FALSE}
+```{r}
 library(tidyverse)
 library(rstan)
 library(shinystan)
@@ -38,28 +38,28 @@ options(mc.cores = parallel::detectCores())
 ## Data
 
 ```{r}
-WtHtData30 <- read_csv("WtHtData30.csv")
-WtHtData30
+HtWtData30 <- read_csv("HtWtData30.csv")
+HtWtData30
 ```
 
 ```{r}
-WtHtData300 <- read_csv("WtHtData300.csv")
-WtHtData300
+HtWtData300 <- read_csv("HtWtData300.csv")
+HtWtData300
 ```
 
 We'll also be interested in comparing the results of using the raw data versus mean-centering the x variable. (Kruschke standardizes both variables using z-scores, but that makes the coefficients of the model harder to interpret.)
 
 ```{r}
-x30_mc <- WtHtData30$height - mean(WtHtData30$height)
-x300_mc <- WtHtData300$height - mean(WtHtData300$height)
+x30_mc <- HtWtData30$height - mean(HtWtData30$height)
+x300_mc <- HtWtData300$height - mean(HtWtData300$height)
 ```
 
 We're going to run three different examples, so we'll make three lists.
 
 ```{r}
-N30 <- NROW(WtHtData30)
-x30 <- WtHtData30$height
-y30 <- WtHtData30$weight
+N30 <- NROW(HtWtData30)
+x30 <- HtWtData30$height
+y30 <- HtWtData30$weight
 stan_data_30 <- list(N = N30, x = x30, y = y30)
 ```
 
@@ -68,17 +68,98 @@ stan_data_30_mc <- list(N = N30, x = x30_mc, y = y30)
 ```
 
 ```{r}
-N300 <- NROW(WtHtData300)
-y300 <- WtHtData300$weight
+N300 <- NROW(HtWtData300)
+y300 <- HtWtData300$weight
 stan_data_300_mc <- list(N = N300, x = x300_mc, y = y300)
 ```
 
 
-## Stan code
+## Examining the prior
+
+```{stan, output.var = "HtWt_robust_prior", cache = TRUE}
+data {
+    int<lower = 0> N;
+    vector[N] x;
+    vector<lower = 0>[N] y;
+}
+transformed data {
+    real<lower = 0> Rate;
+    real<lower = 0> M0;
+    real<lower = 0> S0;
+    real<lower = 0> M1;
+    real<lower = 0> S1;
+    real<lower = 0> L;
+    real<lower = 0> H;
+    
+    Rate = 1.0/29.0;
+    M0 = 70;
+    S0 = 70;
+    M1 = 0;
+    S1 = 3;
+    L = 0;
+    H = 1000;
+}
+parameters {
+    real<lower = 0> nu_minus_one;
+    real beta0;
+    real beta1;
+    real<lower = 0> sigma;
+}
+transformed parameters {
+    real<lower = 1> nu;
+    vector<lower = 0>[N] mu;
+    
+    nu = nu_minus_one + 1;
+    mu = beta0 + beta1 * x;
+}
+model {
+    nu_minus_one ~ exponential(Rate);
+    beta0 ~ normal(M0, S0);
+    beta1 ~ normal(M1, S1);
+    sigma ~ uniform(L, H);
+//    y ~ student_t(nu, mu, sigma);
+}
+```
+
+```{r}
+set.seed(11111)
+fit_HtWt30_robust_prior <- sampling(HtWt_robust_prior,
+                             data = stan_data_30_mc,
+                             refresh = 0)
+```
+
+```{r}
+print(fit_HtWt30_robust_prior,
+      pars = c("nu", "beta0", "beta1", "sigma"))
+```
+
+```{r}
+pairs(fit_HtWt30_robust_prior,
+      pars = c("nu", "beta0", "beta1", "sigma"))
+```
+
+```{r}
+plot(fit_HtWt30_robust_prior, pars = c("nu"))
+```
+
+```{r}
+plot(fit_HtWt30_robust_prior, pars = c("beta0"))
+```
+
+```{r}
+plot(fit_HtWt30_robust_prior, pars = c("beta1"))
+```
+
+```{r}
+plot(fit_HtWt30_robust_prior, pars = c("sigma"))
+```
+
+
+## Model
 
 The only change is to the likelihood and the concomitant prior on `nu`.
 
-```{stan, output.var = "WtHt_robust", cache = TRUE}
+```{stan, output.var = "HtWt_robust", cache = TRUE}
 data {
     int<lower = 0> N;
     vector[N] x;
@@ -130,24 +211,23 @@ generated quantities {
 }
 ```
 
-
-## Sampling from the model
-
 ```{r}
 set.seed(11111)
-fit_WtHt30_robust <- sampling(WtHt_robust, data = stan_data_30, refresh = 0)
+fit_HtWt30_robust <- sampling(HtWt_robust,
+                              data = stan_data_30,
+                              refresh = 0)
 ```
 
 
 ## Diagnosing the model
 
 ```{r}
-plot(fit_WtHt30_robust, plotfun = "ac",
+plot(fit_HtWt30_robust, plotfun = "ac",
      pars = c("nu", "beta0", "beta1", "sigma"))
 ```
 
 ```{r}
-plot(fit_WtHt30_robust, plotfun = "trace",
+plot(fit_HtWt30_robust, plotfun = "trace",
      pars = c("nu", "beta0", "beta1", "sigma"))
 ```
 
@@ -155,23 +235,23 @@ plot(fit_WtHt30_robust, plotfun = "trace",
 ## Summarizing the model
 
 ```{r}
-print(fit_WtHt30_robust, pars = c("nu", "beta0", "beta1", "sigma"))
+print(fit_HtWt30_robust, pars = c("nu", "beta0", "beta1", "sigma"))
 ```
 
 
 ## Visualizing the model
 
 ```{r}
-pairs(fit_WtHt30_robust, pars = c("nu", "beta0", "beta1", "sigma"))
+pairs(fit_HtWt30_robust, pars = c("nu", "beta0", "beta1", "sigma"))
 ```
 
 ```{r}
-plot(fit_WtHt30_robust, plotfun = "dens",
+plot(fit_HtWt30_robust, plotfun = "dens",
      pars = c("nu", "beta0", "beta1", "sigma"))
 ```
 
 ```{r}
-plot(fit_WtHt30_robust, pars = c("nu", "beta0", "beta1", "sigma"))
+plot(fit_HtWt30_robust, pars = c("nu", "beta0", "beta1", "sigma"))
 ```
 
 The huge range on the intercept is due to the fact that small changes to the slope way out to the right of the graph will result in lines that meet the y-axis in wildly different places. This is a good reason to standardize (or at least mean-center the data).
@@ -181,160 +261,83 @@ The huge range on the intercept is due to the fact that small changes to the slo
 
 ```{r}
 set.seed(11111)
-fit_WtHt30_robust_mc <- sampling(WtHt_robust, data = stan_data_30_mc, refresh = 0)
+fit_HtWt30_robust_mc <- sampling(HtWt_robust,
+                                 data = stan_data_30_mc,
+                                 refresh = 0)
 ```
 
 Much better diagnostic plots:
 
 ```{r}
-plot(fit_WtHt30_robust_mc, plotfun = "ac",
+plot(fit_HtWt30_robust_mc, plotfun = "ac",
      pars = c("nu", "beta0", "beta1", "sigma"))
 ```
 
 ```{r}
-plot(fit_WtHt30_robust_mc, plotfun = "trace",
+plot(fit_HtWt30_robust_mc, plotfun = "trace",
      pars = c("nu", "beta0", "beta1", "sigma"))
 ```
 
 Reasonable values for the parameters and their standard deviations:
 
 ```{r}
-print(fit_WtHt30_robust_mc, pars = c("nu", "beta0", "beta1", "sigma"))
+print(fit_HtWt30_robust_mc, pars = c("nu", "beta0", "beta1", "sigma"))
 ```
 
 The beta parameters are now uncorrelated:
 
 ```{r}
-pairs(fit_WtHt30_robust_mc, pars = c("nu", "beta0", "beta1", "sigma"))
+pairs(fit_HtWt30_robust_mc, pars = c("nu", "beta0", "beta1", "sigma"))
 ```
 
 ```{r}
-plot(fit_WtHt30_robust_mc, plotfun = "dens",
+plot(fit_HtWt30_robust_mc, plotfun = "dens",
      pars = c("nu", "beta0", "beta1", "sigma"))
 ```
 
 Tight estimates of the parameters:
 
 ```{r}
-plot(fit_WtHt30_robust_mc, pars = c("nu", "beta0", "beta1", "sigma"))
+plot(fit_HtWt30_robust_mc, pars = c("nu", "beta0", "beta1", "sigma"))
 ```
 
 
-## Examining the prior
-
-```{stan, output.var = "WtHt_robust_prior", cache = TRUE}
-data {
-    int<lower = 0> N;
-    vector[N] x;
-    vector<lower = 0>[N] y;
-}
-transformed data {
-    real<lower = 0> Rate;
-    real<lower = 0> M0;
-    real<lower = 0> S0;
-    real<lower = 0> M1;
-    real<lower = 0> S1;
-    real<lower = 0> L;
-    real<lower = 0> H;
-    
-    Rate = 1.0/29.0;
-    M0 = 70;
-    S0 = 70;
-    M1 = 0;
-    S1 = 3;
-    L = 0;
-    H = 1000;
-}
-parameters {
-    real<lower = 0> nu_minus_one;
-    real beta0;
-    real beta1;
-    real<lower = 0> sigma;
-}
-transformed parameters {
-    real<lower = 1> nu;
-    vector<lower = 0>[N] mu;
-    
-    nu = nu_minus_one + 1;
-    mu = beta0 + beta1 * x;
-}
-model {
-    nu_minus_one ~ exponential(Rate);
-    beta0 ~ normal(M0, S0);
-    beta1 ~ normal(M1, S1);
-    sigma ~ uniform(L, H);
-//    y ~ student_t(nu, mu, sigma);
-}
-```
-
-```{r}
-set.seed(11111)
-fit_WtHt30_robust_prior <- sampling(WtHt_robust_prior,
-                             data = stan_data_30_mc,
-                             refresh = 0)
-```
-
-```{r}
-print(fit_WtHt30_robust_prior,
-      pars = c("nu", "beta0", "beta1", "sigma"))
-```
-
-```{r}
-pairs(fit_WtHt30_robust_prior,
-      pars = c("nu", "beta0", "beta1", "sigma"))
-```
-
-```{r}
-plot(fit_WtHt30_robust_prior, pars = c("nu"))
-```
-
-```{r}
-plot(fit_WtHt30_robust_prior, pars = c("beta0"))
-```
-
-```{r}
-plot(fit_WtHt30_robust_prior, pars = c("beta1"))
-```
-
-```{r}
-plot(fit_WtHt30_robust_prior, pars = c("sigma"))
-```
 
 
 ## The model with 300 observations
 
 ```{r}
 set.seed(11111)
-fit_WtHt300_robust_mc <- sampling(WtHt_robust,
+fit_HtWt300_robust_mc <- sampling(HtWt_robust,
                            data = stan_data_300_mc,
                            refresh = 0)
 ```
 
 ```{r}
-plot(fit_WtHt300_robust_mc, plotfun = "ac",
+plot(fit_HtWt300_robust_mc, plotfun = "ac",
      pars = c("nu", "beta0", "beta1", "sigma"))
 ```
 
 ```{r}
-plot(fit_WtHt300_robust_mc, plotfun = "trace",
+plot(fit_HtWt300_robust_mc, plotfun = "trace",
      pars = c("nu", "beta0", "beta1", "sigma"))
 ```
 
 ```{r}
-print(fit_WtHt300_robust_mc, pars = c("nu", "beta0", "beta1", "sigma"))
+print(fit_HtWt300_robust_mc, pars = c("nu", "beta0", "beta1", "sigma"))
 ```
 
 ```{r}
-pairs(fit_WtHt300_robust_mc, pars = c("nu", "beta0", "beta1", "sigma"))
+pairs(fit_HtWt300_robust_mc, pars = c("nu", "beta0", "beta1", "sigma"))
 ```
 
 ```{r}
-plot(fit_WtHt300_robust_mc, plotfun = "dens",
+plot(fit_HtWt300_robust_mc, plotfun = "dens",
      pars = c("nu", "beta0", "beta1", "sigma"))
 ```
 
 ```{r}
-plot(fit_WtHt300_robust_mc, pars = c("nu", "beta0", "beta1", "sigma"))
+plot(fit_HtWt300_robust_mc, pars = c("nu", "beta0", "beta1", "sigma"))
 ```
 
 
@@ -349,8 +352,8 @@ y <- y30
 Extract predicted values:
 
 ```{r}
-samples_WtHt30 <- extract(fit_WtHt30_robust)
-y_rep <- samples_WtHt30$y_rep
+samples_HtWt30 <- extract(fit_HtWt30_robust)
+y_rep <- samples_HtWt30$y_rep
 ```
 
 ```{r}
@@ -379,5 +382,5 @@ ppc_stat_2d(y, y_rep)
 Run the following code from the Console:
 
 ```
-launch_shinystan(fit_WtHt30_robust)
+launch_shinystan(fit_HtWt30_robust)
 ```
