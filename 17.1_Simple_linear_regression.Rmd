@@ -1,0 +1,360 @@
+---
+title: "17.1: Simple linear regression"
+output: html_notebook
+---
+
+
+## Introduction
+
+This is code for Section 17.1 of Kruschke using a normal noise distribution. Make sure that the two files "WtHtData30.csv" and "WtHtData300.csv" are in your project directory.
+
+
+## Preliminaries
+
+Load necessary packages:
+
+```{r, message = FALSE}
+library(tidyverse)
+library(rstan)
+library(shinystan)
+library(bayesplot)
+```
+
+Set Stan to save compiled code.
+
+```{r}
+rstan_options(auto_write = TRUE)
+```
+
+Set Stan to use parallel processing where possible.
+
+```{r}
+options(mc.cores = parallel::detectCores())
+```
+
+
+## Data
+
+```{r}
+WtHtData30 <- read_csv("WtHtData30.csv")
+WtHtData30
+```
+
+```{r}
+WtHtData300 <- read_csv("WtHtData300.csv")
+WtHtData300
+```
+
+We'll also be interested in comparing the results of using the raw data versus mean-centering the x variable. (Kruschke standardizes both variables using z-scores, but that makes the coefficients of the model harder to interpret.)
+
+```{r}
+x30_mc <- WtHtData30$height - mean(WtHtData30$height)
+x300_mc <- WtHtData300$height - mean(WtHtData300$height)
+```
+
+We're going to run three different examples, so we'll make three lists.
+
+```{r}
+N30 <- NROW(WtHtData30)
+x30 <- WtHtData30$height
+y30 <- WtHtData30$weight
+stan_data_30 <- list(N = N30, x = x30, y = y30)
+```
+
+```{r}
+stan_data_30_mc <- list(N = N30, x = x30_mc, y = y30)
+```
+
+```{r}
+N300 <- NROW(WtHtData300)
+y300 <- WtHtData300$weight
+stan_data_300_mc <- list(N = N300, x = x300_mc, y = y300)
+```
+
+
+## Stan code
+
+We set normal priors on the $\beta_{0}$ (intercept) and $\beta_{1}$ parameters centered at reasonable values and spread over a wide range. The normal model for the likelihood is centered at `mu`, but `mu` is really a vector of values that represent the mean y value for each value of x, which is a point that lies on our regression line, hence the code in the `transformed parameters` block:
+
+```
+mu = beta0 + beta1 * x;
+```
+
+```{stan, output.var = "WtHt", cache = TRUE}
+data {
+    int<lower = 0> N;
+    vector[N] x;
+    vector<lower = 0>[N] y;
+}
+transformed data {
+    real<lower = 0> M0;
+    real<lower = 0> S0;
+    real<lower = 0> M1;
+    real<lower = 0> S1;
+    real<lower = 0> L;
+    real<lower = 0> H;
+    
+    M0 = 70;
+    S0 = 70;
+    M1 = 0;
+    S1 = 3;
+    L = 0;
+    H = 1000;
+}
+parameters {
+    real beta0;
+    real beta1;
+    real<lower = 0> sigma;
+}
+transformed parameters {
+    vector<lower = 0>[N] mu;
+    
+    mu = beta0 + beta1 * x;
+}
+model {
+    beta0 ~ normal(M0, S0);
+    beta1 ~ normal(M1, S1);
+    sigma ~ uniform(L, H);
+    y ~ normal(mu, sigma);
+}
+generated quantities {
+    real y_rep[N];
+    
+    for (n in 1:N) {
+        y_rep[n] = normal_rng(mu[n], sigma);
+    }
+}
+```
+
+
+## Sampling from the model
+
+```{r}
+set.seed(11111)
+fit_WtHt30 <- sampling(WtHt, data = stan_data_30, refresh = 0)
+```
+
+
+## Diagnosing the model
+
+```{r}
+plot(fit_WtHt30, plotfun = "ac", pars = c("beta0", "beta1", "sigma"))
+```
+
+```{r}
+plot(fit_WtHt30, plotfun = "trace",
+     pars = c("beta0", "beta1", "sigma"))
+```
+
+
+## Summarizing the model
+
+```{r}
+print(fit_WtHt30, pars = c("beta0", "beta1", "sigma"))
+```
+
+
+## Visualizing the model
+
+```{r}
+pairs(fit_WtHt30, pars = c("beta0", "beta1", "sigma"))
+```
+
+```{r}
+plot(fit_WtHt30, plotfun = "dens", pars = c("beta0", "beta1", "sigma"))
+```
+
+```{r}
+plot(fit_WtHt30, pars = c("beta0", "beta1", "sigma"))
+```
+
+The huge range on the intercept is due to the fact that small changes to the slope way out to the right of the graph will result in lines that meet the y-axis in wildly different places. This is a good reason to standardize (or at least mean-center the data).
+
+
+## The mean-centered model
+
+```{r}
+set.seed(11111)
+fit_WtHt30_mc <- sampling(WtHt, data = stan_data_30_mc, refresh = 0)
+```
+
+Much better diagnostic plots:
+
+```{r}
+plot(fit_WtHt30_mc, plotfun = "ac", pars = c("beta0", "beta1", "sigma"))
+```
+
+```{r}
+plot(fit_WtHt30_mc, plotfun = "trace",
+     pars = c("beta0", "beta1", "sigma"))
+```
+
+Reasonable values for the parameters and their standard deviations:
+
+```{r}
+print(fit_WtHt30_mc, pars = c("beta0", "beta1", "sigma"))
+```
+
+The beta parameters are now uncorrelated:
+
+```{r}
+pairs(fit_WtHt30_mc, pars = c("beta0", "beta1", "sigma"))
+```
+
+```{r}
+plot(fit_WtHt30_mc, plotfun = "dens",
+     pars = c("beta0", "beta1", "sigma"))
+```
+
+Tight estimates of the parameters:
+
+```{r}
+plot(fit_WtHt30_mc, pars = c("beta0", "beta1", "sigma"))
+```
+
+
+## Examining the prior
+
+```{stan, output.var = "WtHt_prior", cache = TRUE}
+data {
+    int<lower = 0> N;
+    vector[N] x;
+    vector<lower = 0>[N] y;
+}
+transformed data {
+    real<lower = 0> M0;
+    real<lower = 0> S0;
+    real<lower = 0> M1;
+    real<lower = 0> S1;
+    real<lower = 0> L;
+    real<lower = 0> H;
+    
+    M0 = 70;
+    S0 = 70;
+    M1 = 0;
+    S1 = 3;
+    L = 0;
+    H = 1000;
+}
+parameters {
+    real beta0;
+    real beta1;
+    real<lower = 0> sigma;
+}
+transformed parameters {
+    vector<lower = 0>[N] mu;
+    
+    mu = beta0 + beta1 * x;
+}
+model {
+    beta0 ~ normal(M0, S0);
+    beta1 ~ normal(M1, S1);
+    sigma ~ uniform(L, H);
+//    y ~ normal(mu, sigma);
+}
+```
+
+```{r}
+set.seed(11111)
+fit_WtHt30_prior <- sampling(WtHt_prior, data = stan_data_30_mc, refresh = 0)
+```
+
+```{r}
+print(fit_WtHt30_prior, pars = c("beta0", "beta1", "sigma"))
+```
+
+```{r}
+pairs(fit_WtHt30_prior, pars = c("beta0", "beta1", "sigma"))
+```
+
+```{r}
+plot(fit_WtHt30_prior, pars = c("beta0"))
+```
+
+```{r}
+plot(fit_WtHt30_prior, pars = c("beta1"))
+```
+
+```{r}
+plot(fit_WtHt30_prior, pars = c("sigma"))
+```
+
+
+## The model with 300 observations
+
+```{r}
+set.seed(11111)
+fit_WtHt300_mc <- sampling(WtHt, data = stan_data_300_mc, refresh = 0)
+```
+
+```{r}
+plot(fit_WtHt300_mc, plotfun = "ac",
+     pars = c("beta0", "beta1", "sigma"))
+```
+
+```{r}
+plot(fit_WtHt300_mc, plotfun = "trace",
+     pars = c("beta0", "beta1", "sigma"))
+```
+
+```{r}
+print(fit_WtHt300_mc, pars = c("beta0", "beta1", "sigma"))
+```
+
+```{r}
+pairs(fit_WtHt300_mc, pars = c("beta0", "beta1", "sigma"))
+```
+
+```{r}
+plot(fit_WtHt300_mc, plotfun = "dens",
+     pars = c("beta0", "beta1", "sigma"))
+```
+
+```{r}
+plot(fit_WtHt300_mc, pars = c("beta0", "beta1", "sigma"))
+```
+
+
+## Posterior predictive check
+
+We'll just do this for the example with 30 observations.
+
+```{r}
+y <- y30
+```
+
+Extract predicted values:
+
+```{r}
+samples_WtHt30 <- extract(fit_WtHt30)
+y_rep <- samples_WtHt30$y_rep
+```
+
+```{r}
+ppc_hist(y, y_rep[1:5, ])
+```
+
+```{r}
+ppc_boxplot(y, y_rep[1:5, ])
+```
+
+```{r}
+ppc_dens(y, y_rep[1:5, ])
+```
+
+```{r}
+ppc_dens_overlay(y, y_rep[1:30, ])
+```
+
+```{r}
+ppc_stat_2d(y, y_rep)
+```
+
+
+## ShinyStan
+
+Run the following code from the Console:
+
+```
+launch_shinystan(fit_WtHt30)
+```

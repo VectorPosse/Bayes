@@ -1,0 +1,235 @@
+---
+title: "16.1: Smart Drug"
+output: html_notebook
+---
+
+
+## Introduction
+
+This is the example from Section 16.1 of Kruschke on the (fictitious) effect of the "smart drug". Make sure the "TwoGroupIQ.csv" file is in your project directory.
+
+
+## Preliminaries
+
+Load necessary packages:
+
+```{r, message = FALSE}
+library(tidyverse)
+library(rstan)
+library(shinystan)
+library(bayesplot)
+```
+
+Set Stan to save compiled code.
+
+```{r}
+rstan_options(auto_write = TRUE)
+```
+
+Set Stan to use parallel processing where possible.
+
+```{r}
+options(mc.cores = parallel::detectCores())
+```
+
+
+## Data
+
+```{r}
+IQ_data <- read_csv("TwoGroupIQ.csv")
+IQ_data
+```
+
+For this 1-sample test, we will only look at those who took the smart drug.
+
+```{r}
+IQ1_data <- IQ_data %>%
+    filter(Group == "Smart Drug")
+IQ1_data
+```
+
+
+```{r}
+N <- NROW(IQ1_data)
+y <- IQ1_data$Score
+stan_data <- list(N = N, y = y)
+```
+
+
+## Stan code
+
+```{stan, output.var = "IQ", cache = TRUE}
+data {
+    int<lower = 0> N;
+    real<lower = 0> y[N];
+}
+transformed data {
+    real<lower = 0> M;
+    real<lower = 0> S;
+    real<lower = 0> L;
+    real<lower = 0> H;
+    
+    M = 100;
+    S = 100;
+    L = 0;
+    H = 1000;
+}
+parameters {
+    real<lower = 0> mu;
+    real<lower = 0> sigma;
+}
+model {
+    mu ~ normal(M, S);
+    sigma ~ uniform(L, H);
+    y ~ normal(mu, sigma);
+}
+generated quantities {
+    real y_rep[N];
+    
+    for (n in 1:N) {
+        y_rep[n] = normal_rng(mu, sigma);
+    }
+}
+```
+
+
+## Sampling from the model
+
+```{r}
+set.seed(11111)
+fit_IQ <- sampling(IQ, data = stan_data, refresh = 0)
+```
+
+
+## Diagnosing the model
+
+```{r}
+plot(fit_IQ, plotfun = "ac", pars = c("mu", "sigma"))
+```
+
+```{r}
+plot(fit_IQ, plotfun = "trace",
+     pars = c("mu", "sigma"))
+```
+
+
+## Summarizing the model
+
+```{r}
+print(fit_IQ, pars = c("mu", "sigma"))
+```
+
+
+## Visualizing the model
+
+```{r}
+pairs(fit_IQ, pars = c("mu", "sigma"))
+```
+
+```{r}
+plot(fit_IQ, plotfun = "dens", pars = c("mu", "sigma"))
+```
+
+```{r}
+plot(fit_IQ, pars = c("mu", "sigma"))
+```
+
+
+## Examining the prior
+
+```{stan, output.var = "IQ_prior", cache = TRUE}
+data {
+    int<lower = 0> N;
+    real<lower = 0> y[N];
+}
+transformed data {
+    real<lower = 0> M;
+    real<lower = 0> S;
+    real<lower = 0> L;
+    real<lower = 0> H;
+    
+    M = 100;
+    S = 100;
+    L = 0;
+    H = 1000;
+}
+parameters {
+    real<lower = 0> mu;
+    real<lower = 0> sigma;
+}
+model {
+    mu ~ normal(M, S);
+    sigma ~ uniform(L, H);
+//    y ~ normal(mu, sigma);
+}
+```
+
+```{r}
+set.seed(11111)
+fit_IQ_prior <- sampling(IQ_prior, data = stan_data, refresh = 0)
+```
+
+```{r}
+fit_IQ_prior
+```
+
+```{r}
+pairs(fit_IQ_prior, pars = c("mu", "sigma"))
+```
+
+```{r}
+plot(fit_IQ_prior, pars = c("mu", "sigma"))
+```
+
+
+## Posterior predictive check
+
+Extract predicted values:
+
+```{r}
+samples_IQ <- extract(fit_IQ)
+y_rep <- samples_IQ$y_rep
+```
+
+Graph values of $y$ against summaries of $y_{rep}$. There are lots of options for numerical data.
+
+For the ones that generate lots of subgraphs, we'll only compare the data to the first 5 replications.
+
+```{r}
+ppc_hist(y, y_rep[1:5, ])
+```
+
+```{r}
+ppc_boxplot(y, y_rep[1:5, ])
+```
+
+```{r}
+ppc_dens(y, y_rep[1:5, ])
+```
+
+In an overlay, we can include a few more. (In theory, we could include all replications, but the function takes a long time to process.)
+
+```{r}
+ppc_dens_overlay(y, y_rep[1:30, ])
+```
+
+For test statistics, we can include all replications.
+
+```{r}
+ppc_stat_2d(y, y_rep)
+```
+
+Same goes for intervals. (This graph is getting a little on the busy side. For larger data sets, we would want to limit the number of replications in one plot.
+
+```{r}
+ppc_intervals(y, y_rep)
+```
+
+
+## ShinyStan
+
+Run the following code from the Console:
+
+```
+launch_shinystan(fit_IQ)
+```

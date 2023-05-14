@@ -1,0 +1,223 @@
+---
+title: "9.2(b): Multiple coins from a single mint"
+output: html_notebook
+---
+
+
+## Introduction
+
+This is the second of three models in Section 9.2 of Kruschke. It makes a weak claim about the value of $\omega$, but a strong dependence of $\theta$ on $\omega$.
+
+
+## Preliminaries
+
+Load necessary packages:
+
+```{r, message = FALSE}
+library(rstan)
+library(shinystan)
+library(bayesplot)
+```
+
+Set Stan to save compiled code.
+
+```{r}
+rstan_options(auto_write = TRUE)
+```
+
+Set Stan to use parallel processing where possible.
+
+```{r}
+options(mc.cores = parallel::detectCores())
+```
+
+
+## Data
+
+```{r}
+S <- 2 # 2 coins
+N1 <- 15
+N2 <- 5
+N <- c(N1, N2) 
+y1 <- 3 # 3 heads (of 15)
+y2 <- 4 # 4 heads (of 5)
+y <- c(y1, y2)
+stan_data <- list(S = S, N = N, y = y)
+```
+
+
+## Stan code
+
+The only thing different here are the values of $A_{\omega}$, $B_{\omega}$, and $K$.
+
+```{stan, output.var = "mcsmb", cache = TRUE}
+data {
+    int<lower = 0> S;
+    int<lower = 0> N[S];
+    int<lower = 0> y[S];
+}
+transformed data {
+    real<lower = 0> A_omega;
+    real<lower = 0> B_omega;
+    real<lower = 0> K;
+
+    A_omega = 2;
+    B_omega = 2;
+    K = 75;
+}
+parameters {
+    real<lower = 0, upper = 1> omega;
+    real<lower = 0, upper = 1> theta[S];
+}
+transformed parameters {
+    real<lower = 0> a;
+    real<lower = 0> b;
+    
+    a = omega * (K - 2) + 1;
+    b = (1 - omega) * (K - 2) + 1;
+}
+model {
+    omega ~ beta(A_omega, B_omega);
+    theta ~ beta(a, b);
+    y ~ binomial(N, theta);
+}
+generated quantities {
+    int<lower = 0> y_rep[S];
+    
+    for (s in 1:S) {
+        y_rep[s] = binomial_rng(N[s], theta[s]);
+    }
+}
+```
+
+
+## Sampling from the model
+
+```{r}
+set.seed(11111)
+fit_mcsmb <- sampling(mcsmb, data = stan_data, refresh = 0)
+```
+
+
+## Diagnosing the model
+
+```{r}
+plot(fit_mcsmb, plotfun = "ac", pars = c("omega", "theta"))
+```
+
+```{r}
+plot(fit_mcsmb, plotfun = "trace",
+     pars = c("omega", "theta"))
+```
+
+
+## Summarizing the model
+
+```{r}
+fit_mcsmb
+```
+
+
+## Visualizing the model
+
+```{r}
+pairs(fit_mcsmb, pars = c("omega", "theta"))
+```
+
+```{r}
+plot(fit_mcsmb, pars = c("omega", "theta"))
+```
+
+With a much larger value of $K$, the values of $\theta$ are much more constrained to follow the value of $\omega$ from the prior.
+
+
+## Examining the prior
+
+```{stan, output.var = "mcsmb_prior", cache = TRUE}
+data {
+    int<lower = 0> S;
+    int<lower = 0> N[S];
+    int<lower = 0> y[S];
+}
+transformed data {
+    real<lower = 0> A_omega;
+    real<lower = 0> B_omega;
+    real<lower = 0> K;
+
+    A_omega = 2;
+    B_omega = 2;
+    K = 75;
+}
+parameters {
+    real<lower = 0, upper = 1> omega;
+    real<lower = 0, upper = 1> theta[S];
+}
+transformed parameters {
+    real<lower = 0> a;
+    real<lower = 0> b;
+    
+    a = omega * (K - 2) + 1;
+    b = (1 - omega) * (K - 2) + 1;
+}
+model {
+    omega ~ beta(A_omega, B_omega);
+    theta ~ beta(a, b);
+//    y ~ binomial(N, theta);
+}
+```
+
+```{r}
+set.seed(11111)
+fit_mcsmb_prior <- sampling(mcsmb_prior, data = stan_data, refresh = 0)
+```
+
+```{r}
+fit_mcsmb_prior
+```
+
+```{r}
+pairs(fit_mcsmb_prior, pars = c("omega", "theta"))
+```
+
+```{r}
+plot(fit_mcsmb_prior, pars = c("omega", "theta"))
+```
+
+
+## Posterior predictive check
+
+Extract predicted values:
+
+```{r}
+samples_mcsmb <- extract(fit_mcsmb)
+y_rep <- samples_mcsmb$y_rep
+```
+
+Graph values of $y$ against summaries of $y_{rep}$.
+
+(The `ppc_stat` function requires a matrix as input, so we have to convert the single columns of values in `y_rep[, 1]` to a 4000 by 1 matrix.)
+
+```{r}
+ppc_stat(y[1], as.matrix(y_rep[ , 1]))
+```
+
+```{r}
+ppc_stat(y[2], as.matrix(y_rep[ , 2]))
+```
+
+The $x$ value in the graph below simply identifies the two coins.
+
+```{r}
+ppc_intervals(y, y_rep)
+```
+
+Here there is a lot more shrinkage because the values of $\theta$ (from which the posterior draws are taken) are much closer to 50% for each coin.
+
+
+## ShinyStan
+
+Run the following code from the Console:
+
+```
+launch_shinystan(fit_mcsmb)
+```
