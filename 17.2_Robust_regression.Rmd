@@ -296,14 +296,6 @@ ggplot(HtWtData30, aes(y = weight, x = height_mc)) +
 ```
 
 ```{r}
-ppc_intervals(y = HtWtData30$weight,
-              x = HtWtData30$height_mc,
-              yrep = y_sim_HtWt30_robust,
-              prob = 0.68,
-              prob_outer = 0.95)
-```
-
-```{r}
 ppc_hist(y = HtWtData30$weight,
          yrep = y_sim_HtWt30_robust[1:19, ])
 ```
@@ -317,6 +309,24 @@ ppc_boxplot(y = HtWtData30$weight,
 ```{r}
 ppc_dens_overlay(y = HtWtData30$weight,
                  yrep = y_sim_HtWt30_robust[1:50, ])
+```
+
+```{r}
+ppc_scatter(y = HtWtData30$weight,
+            yrep = y_sim_HtWt30_robust[1:9, ])
+```
+
+```{r}
+ppc_scatter_avg(y = HtWtData30$weight,
+                yrep = y_sim_HtWt30_robust)
+```
+
+```{r}
+ppc_intervals(y = HtWtData30$weight,
+              x = HtWtData30$height_mc,
+              yrep = y_sim_HtWt30_robust,
+              prob = 0.68,
+              prob_outer = 0.95)
 ```
 
 ```{r}
@@ -420,14 +430,6 @@ ggplot(HtWtData300, aes(y = weight, x = height_mc)) +
 ```
 
 ```{r}
-ppc_intervals(y = HtWtData300$weight,
-              x = HtWtData300$height_mc,
-              yrep = y_sim_HtWt300_robust,
-              prob = 0.68,
-              prob_outer = 0.95)
-```
-
-```{r}
 ppc_hist(y = HtWtData300$weight,
          yrep = y_sim_HtWt300_robust[1:19, ])
 ```
@@ -443,7 +445,23 @@ ppc_dens_overlay(y = HtWtData300$weight,
                  yrep = y_sim_HtWt300_robust[1:50, ])
 ```
 
-The data is being pulled up by the outliers, but the model is now treating them as outliers and keeping the predicted mean at a lower value.
+```{r}
+ppc_scatter(y = HtWtData300$weight,
+            yrep = y_sim_HtWt300_robust[1:9, ])
+```
+
+```{r}
+ppc_scatter_avg(y = HtWtData300$weight,
+                yrep = y_sim_HtWt300_robust)
+```
+
+```{r}
+ppc_intervals(y = HtWtData300$weight,
+              x = HtWtData300$height_mc,
+              yrep = y_sim_HtWt300_robust,
+              prob = 0.68,
+              prob_outer = 0.95)
+```
 
 ```{r}
 ppc_stat_2d(y = HtWtData300$weight,

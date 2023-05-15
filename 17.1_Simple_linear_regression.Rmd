@@ -291,14 +291,6 @@ ggplot(HtWtData30, aes(y = weight, x = height)) +
 ```
 
 ```{r}
-ppc_intervals(y = HtWtData30$weight,
-              x = HtWtData30$height_mc,
-              yrep = y_sim_HtWt30,
-              prob = 0.68,
-              prob_outer = 0.95)
-```
-
-```{r}
 ppc_hist(y = HtWtData30$weight,
          yrep = y_sim_HtWt30[1:19, ])
 ```
@@ -315,10 +307,27 @@ ppc_dens_overlay(y = HtWtData30$weight,
 ```
 
 ```{r}
+ppc_scatter(y = HtWtData30$weight,
+            yrep = y_sim_HtWt30[1:9, ])
+```
+
+```{r}
+ppc_scatter_avg(y = HtWtData30$weight,
+                yrep = y_sim_HtWt30)
+```
+
+```{r}
+ppc_intervals(y = HtWtData30$weight,
+              x = HtWtData30$height_mc,
+              yrep = y_sim_HtWt30,
+              prob = 0.68,
+              prob_outer = 0.95)
+```
+
+```{r}
 ppc_stat_2d(y = HtWtData30$weight,
             yrep = y_sim_HtWt30)
 ```
-
 
 
 ## The model with 300 observations
@@ -414,14 +423,6 @@ ggplot(HtWtData300, aes(y = weight, x = height_mc)) +
 ```
 
 ```{r}
-ppc_intervals(y = HtWtData300$weight,
-              x = HtWtData300$height_mc,
-              yrep = y_sim_HtWt300,
-              prob = 0.68,
-              prob_outer = 0.95)
-```
-
-```{r}
 ppc_hist(y = HtWtData300$weight,
          yrep = y_sim_HtWt300[1:19, ])
 ```
@@ -435,6 +436,24 @@ ppc_boxplot(y = HtWtData300$weight,
 ```{r}
 ppc_dens_overlay(y = HtWtData300$weight,
                  yrep = y_sim_HtWt300[1:50, ])
+```
+
+```{r}
+ppc_scatter(y = HtWtData300$weight,
+            yrep = y_sim_HtWt300[1:9, ])
+```
+
+```{r}
+ppc_scatter_avg(y = HtWtData300$weight,
+                yrep = y_sim_HtWt300)
+```
+
+```{r}
+ppc_intervals(y = HtWtData300$weight,
+              x = HtWtData300$height_mc,
+              yrep = y_sim_HtWt300,
+              prob = 0.68,
+              prob_outer = 0.95)
 ```
 
 ```{r}
