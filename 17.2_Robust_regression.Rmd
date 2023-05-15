@@ -82,7 +82,7 @@ ggplot(HtWtData300, aes(y = weight, x = height_mc)) +
     geom_point()
 ```
 
-We're going to run two different examples, so we'll make two lists.
+We're going to run two different examples, so we'll make two lists. Unlike in the last section, we'll use the mean-centered `height_mc` for both data fits.
 
 ```{r}
 stan_data_30 <- list(N = NROW(HtWtData30),
@@ -97,6 +97,8 @@ stan_data_300 <- list(N = NROW(HtWtData300),
 ## Prior
 
 ### Simulation code
+
+Since we're using a mean-centered predictor, we can choose a prior that is more sensible for the average weight for a person of average height.
 
 ```{stan, output.var = "HtWt_robust_prior", cache = TRUE}
 data {
@@ -146,6 +148,8 @@ mcmc_hist(samples_HtWt30_robust_prior,
 mcmc_pairs(fit_HtWt30_robust_prior,
            pars = c("nu", "sigma", "beta0", "beta1"))
 ```
+
+Prior predictive simulations are still all over the place, but they tend to concentrate in the correct area:
 
 ```{r}
 ggplot(HtWtData30, aes(y = weight, x = height_mc)) +
@@ -230,7 +234,7 @@ mcmc_acf(fit_HtWt30_robust,
 
 ```{r}
 print(fit_HtWt30_robust,
-      pars = c("nu", "beta0", "beta1", "sigma"))
+      pars = c("nu", "sigma", "beta0", "beta1"))
 ```
 
 
@@ -354,7 +358,7 @@ mcmc_acf(fit_HtWt300_robust,
 
 ```{r}
 print(fit_HtWt300_robust,
-      pars = c("nu", "beta0", "beta1", "sigma"))
+      pars = c("nu", "sigma", "beta0", "beta1"))
 ```
 
 
@@ -438,6 +442,8 @@ ppc_boxplot(y = HtWtData300$weight,
 ppc_dens_overlay(y = HtWtData300$weight,
                  yrep = y_sim_HtWt300_robust[1:50, ])
 ```
+
+The data is being pulled up by the outliers, but the model is now treating them as outliers and keeping the predicted mean at a lower value.
 
 ```{r}
 ppc_stat_2d(y = HtWtData300$weight,

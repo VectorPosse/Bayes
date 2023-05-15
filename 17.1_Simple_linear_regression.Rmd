@@ -6,17 +6,17 @@ output: html_notebook
 
 ## Introduction
 
-This is code for Section 17.1 of Kruschke using a normal noise distribution. Make sure that the two files "WtHtData30.csv" and "WtHtData300.csv" are in your project directory.
+This is code for Section 17.1 of Kruschke using a normal noise distribution. Make sure that the two files "HtWtData30.csv" and "HtWtData300.csv" are in your project directory.
 
 
 ## Preliminaries
 
 Load necessary packages:
 
-```{r, message = FALSE}
+```{r}
 library(tidyverse)
 library(rstan)
-library(shinystan)
+library(tidybayes)
 library(bayesplot)
 ```
 
@@ -36,70 +36,150 @@ options(mc.cores = parallel::detectCores())
 ## Data
 
 ```{r}
-WtHtData30 <- read_csv("WtHtData30.csv")
-WtHtData30
+HtWtData30 <- read_csv("HtWtData30.csv")
+HtWtData30
 ```
 
 ```{r}
-WtHtData300 <- read_csv("WtHtData300.csv")
-WtHtData300
-```
-
-We'll also be interested in comparing the results of using the raw data versus mean-centering the x variable. (Kruschke standardizes both variables using z-scores, but that makes the coefficients of the model harder to interpret.)
-
-```{r}
-x30_mc <- WtHtData30$height - mean(WtHtData30$height)
-x300_mc <- WtHtData300$height - mean(WtHtData300$height)
-```
-
-We're going to run three different examples, so we'll make three lists.
-
-```{r}
-N30 <- NROW(WtHtData30)
-x30 <- WtHtData30$height
-y30 <- WtHtData30$weight
-stan_data_30 <- list(N = N30, x = x30, y = y30)
+ggplot(HtWtData30, aes(y = weight, x = height)) +
+    geom_point()
 ```
 
 ```{r}
-stan_data_30_mc <- list(N = N30, x = x30_mc, y = y30)
+HtWtData300 <- read_csv("HtWtData300.csv")
+HtWtData300
 ```
 
 ```{r}
-N300 <- NROW(WtHtData300)
-y300 <- WtHtData300$weight
-stan_data_300_mc <- list(N = N300, x = x300_mc, y = y300)
+ggplot(HtWtData300, aes(y = weight, x = height)) +
+    geom_point()
+```
+
+We'll also mean center the x variable to get an interpretable intercept. (Kruschke standardizes both variables using z-scores, but that makes the coefficients of the model harder to interpret.)
+
+```{r}
+HtWtData30 <- HtWtData30 %>%
+    mutate(height_mc = height - mean(height))
+HtWtData30
+```
+
+```{r}
+ggplot(HtWtData30, aes(y = weight, x = height_mc)) +
+    geom_point()
 ```
 
 
-## Stan code
+```{r}
+HtWtData300 <- HtWtData300 %>%
+    mutate(height_mc = height - mean(height))
+HtWtData300
+```
 
-We set normal priors on the $\beta_{0}$ (intercept) and $\beta_{1}$ parameters centered at reasonable values and spread over a wide range. The normal model for the likelihood is centered at `mu`, but `mu` is really a vector of values that represent the mean y value for each value of x, which is a point that lies on our regression line, hence the code in the `transformed parameters` block:
+```{r}
+ggplot(HtWtData300, aes(y = weight, x = height_mc)) +
+    geom_point()
+```
+
+We're going to run two different examples, so we'll make two lists. The first list is for the sample of size 30. We'll use the uncentered `height` variable to illustrate the issues that arise with the intercept. The second list will be for the sample of size 300, and we'll use the mean-centeted `height_mc` here.
+
+```{r}
+stan_data_30 <- list(N = NROW(HtWtData30),
+                     y = HtWtData30$weight,
+                     x = HtWtData30$height)
+stan_data_300 <- list(N = NROW(HtWtData300),
+                      y = HtWtData300$weight,
+                      x = HtWtData300$height_mc)
+```
+
+
+## Prior
+
+We set normal priors on the $\beta_{0}$ (intercept) and $\beta_{1}$ (slope) parameters. While we have some idea of the possible slopes, we have no idea about the intercept (at least for the uncentered version of `height`), so we'll need an especially wide prior on the intercept. The normal model for the likelihood is centered at `mu`, but `mu` is really a vector of values that represent the mean y value for each value of x, which is a point that lies on our regression line, hence the code in the `transformed parameters` block:
 
 ```
 mu = beta0 + beta1 * x;
 ```
 
-```{stan, output.var = "WtHt", cache = TRUE}
+### Simulation code
+
+```{stan, output.var = "HtWt_prior", cache = TRUE}
 data {
     int<lower = 0> N;
-    vector[N] x;
     vector<lower = 0>[N] y;
+    vector[N] x;
 }
-transformed data {
-    real<lower = 0> M0;
-    real<lower = 0> S0;
-    real<lower = 0> M1;
-    real<lower = 0> S1;
-    real<lower = 0> L;
-    real<lower = 0> H;
+generated quantities {
+    real beta0;
+    real beta1;
+    vector[N] mu;
+    real<lower = 0> sigma;
+    real y_sim[N];
     
-    M0 = 70;
-    S0 = 70;
-    M1 = 0;
-    S1 = 3;
-    L = 0;
-    H = 1000;
+    beta0 = normal_rng(0, 200);   // Intercept between -400 and 400
+    beta1 = normal_rng(0, 5);     // -10 to 10 lbs per inch
+    mu = beta0 + beta1 * x;       // linear model
+    sigma = exponential_rng(1.0/100.0); // sd of 100 lbs
+    y_sim = normal_rng(mu, sigma);
+}
+```
+
+```{r, cache = TRUE}
+fit_HtWt30_prior <- sampling(HtWt_prior,
+                             data = stan_data_30,
+                             chains = 1,
+                             algorithm = "Fixed_param",
+                             seed = 11111,
+                             refresh = 0
+)
+```
+
+```{r}
+samples_HtWt30_prior <- tidy_draws(fit_HtWt30_prior)
+samples_HtWt30_prior
+```
+
+### Examine prior
+
+```{r}
+mcmc_hist(samples_HtWt30_prior,
+          pars = c("sigma", "beta0", "beta1"))
+```
+
+```{r}
+mcmc_pairs(fit_HtWt30_prior,
+           pars = c("sigma", "beta0", "beta1"))
+```
+
+```{r}
+ggplot(HtWtData30, aes(y = weight, x = height)) +
+    geom_point() +
+    geom_abline(data = samples_HtWt30_prior,
+                aes(intercept = beta0, slope = beta1),
+                alpha = 0.05)
+```
+
+
+### Prior predictive distribution
+
+```{r}
+y_sim_HtWt30_prior <- samples_HtWt30_prior %>%
+    select(starts_with("y_sim")) %>%
+    as.matrix()
+```
+
+```{r}
+ppd_intervals(ypred = y_sim_HtWt30_prior,
+              x = HtWtData30$height)
+```
+
+
+## Model
+
+```{stan, output.var = "HtWt", cache = TRUE}
+data {
+    int<lower = 0> N;
+    vector<lower = 0>[N] y;
+    vector[N] x;
 }
 parameters {
     real beta0;
@@ -107,254 +187,257 @@ parameters {
     real<lower = 0> sigma;
 }
 transformed parameters {
-    vector<lower = 0>[N] mu;
-    
-    mu = beta0 + beta1 * x;
+    vector[N] mu;
+    mu = beta0 + beta1 * x;   // linear model
 }
 model {
-    beta0 ~ normal(M0, S0);
-    beta1 ~ normal(M1, S1);
-    sigma ~ uniform(L, H);
+    beta0 ~ normal(0, 200);   // Intercept between -400 and 400
+    beta1 ~ normal(0, 5);     // -10 to 10 lbs per inch
+    sigma ~ exponential(1.0/100.0); // sd of 100 lbs
     y ~ normal(mu, sigma);
 }
 generated quantities {
-    real y_rep[N];
-    
-    for (n in 1:N) {
-        y_rep[n] = normal_rng(mu[n], sigma);
-    }
+    real y_sim[N];
+    y_sim = normal_rng(mu, sigma);
 }
 ```
 
-
-## Sampling from the model
-
-```{r}
-set.seed(11111)
-fit_WtHt30 <- sampling(WtHt, data = stan_data_30, refresh = 0)
-```
-
-
-## Diagnosing the model
-
-```{r}
-plot(fit_WtHt30, plotfun = "ac", pars = c("beta0", "beta1", "sigma"))
+```{r, cache = TRUE}
+fit_HtWt30 <- sampling(HtWt,
+                       data = stan_data_30,
+                       seed = 11111,
+                       refresh = 0)
 ```
 
 ```{r}
-plot(fit_WtHt30, plotfun = "trace",
-     pars = c("beta0", "beta1", "sigma"))
+samples_HtWt30 <- tidy_draws(fit_HtWt30)
+samples_HtWt30
 ```
 
-
-## Summarizing the model
-
-```{r}
-print(fit_WtHt30, pars = c("beta0", "beta1", "sigma"))
-```
-
-
-## Visualizing the model
+## Model diagnostics
 
 ```{r}
-pairs(fit_WtHt30, pars = c("beta0", "beta1", "sigma"))
+stan_trace(fit_HtWt30,
+           pars = c("sigma", "beta0", "beta1"))
 ```
 
 ```{r}
-plot(fit_WtHt30, plotfun = "dens", pars = c("beta0", "beta1", "sigma"))
+mcmc_acf(fit_HtWt30,
+         pars = c("sigma", "beta0", "beta1"))
+```
+
+
+## Model summary
+
+```{r}
+print(fit_HtWt30,
+      pars = c("sigma", "beta0", "beta1"))
+```
+
+
+## Model visualization
+
+```{r}
+mcmc_areas(fit_HtWt30, pars ="sigma")
 ```
 
 ```{r}
-plot(fit_WtHt30, pars = c("beta0", "beta1", "sigma"))
-```
-
-The huge range on the intercept is due to the fact that small changes to the slope way out to the right of the graph will result in lines that meet the y-axis in wildly different places. This is a good reason to standardize (or at least mean-center the data).
-
-
-## The mean-centered model
-
-```{r}
-set.seed(11111)
-fit_WtHt30_mc <- sampling(WtHt, data = stan_data_30_mc, refresh = 0)
-```
-
-Much better diagnostic plots:
-
-```{r}
-plot(fit_WtHt30_mc, plotfun = "ac", pars = c("beta0", "beta1", "sigma"))
+mcmc_areas(fit_HtWt30, pars ="beta0")
 ```
 
 ```{r}
-plot(fit_WtHt30_mc, plotfun = "trace",
-     pars = c("beta0", "beta1", "sigma"))
+mcmc_areas(fit_HtWt30, pars = "beta1")
 ```
 
-Reasonable values for the parameters and their standard deviations:
+Observe the strong negative correlation between `beta0` and `beta1` below. If the slope increases, the intercept is forced downward, and if the slope decreases, the intercept is forced upward.
 
 ```{r}
-print(fit_WtHt30_mc, pars = c("beta0", "beta1", "sigma"))
-```
-
-The beta parameters are now uncorrelated:
-
-```{r}
-pairs(fit_WtHt30_mc, pars = c("beta0", "beta1", "sigma"))
-```
-
-```{r}
-plot(fit_WtHt30_mc, plotfun = "dens",
-     pars = c("beta0", "beta1", "sigma"))
-```
-
-Tight estimates of the parameters:
-
-```{r}
-plot(fit_WtHt30_mc, pars = c("beta0", "beta1", "sigma"))
-```
-
-
-## Examining the prior
-
-```{stan, output.var = "WtHt_prior", cache = TRUE}
-data {
-    int<lower = 0> N;
-    vector[N] x;
-    vector<lower = 0>[N] y;
-}
-transformed data {
-    real<lower = 0> M0;
-    real<lower = 0> S0;
-    real<lower = 0> M1;
-    real<lower = 0> S1;
-    real<lower = 0> L;
-    real<lower = 0> H;
-    
-    M0 = 70;
-    S0 = 70;
-    M1 = 0;
-    S1 = 3;
-    L = 0;
-    H = 1000;
-}
-parameters {
-    real beta0;
-    real beta1;
-    real<lower = 0> sigma;
-}
-transformed parameters {
-    vector<lower = 0>[N] mu;
-    
-    mu = beta0 + beta1 * x;
-}
-model {
-    beta0 ~ normal(M0, S0);
-    beta1 ~ normal(M1, S1);
-    sigma ~ uniform(L, H);
-//    y ~ normal(mu, sigma);
-}
-```
-
-```{r}
-set.seed(11111)
-fit_WtHt30_prior <- sampling(WtHt_prior, data = stan_data_30_mc, refresh = 0)
-```
-
-```{r}
-print(fit_WtHt30_prior, pars = c("beta0", "beta1", "sigma"))
-```
-
-```{r}
-pairs(fit_WtHt30_prior, pars = c("beta0", "beta1", "sigma"))
-```
-
-```{r}
-plot(fit_WtHt30_prior, pars = c("beta0"))
-```
-
-```{r}
-plot(fit_WtHt30_prior, pars = c("beta1"))
-```
-
-```{r}
-plot(fit_WtHt30_prior, pars = c("sigma"))
-```
-
-
-## The model with 300 observations
-
-```{r}
-set.seed(11111)
-fit_WtHt300_mc <- sampling(WtHt, data = stan_data_300_mc, refresh = 0)
-```
-
-```{r}
-plot(fit_WtHt300_mc, plotfun = "ac",
-     pars = c("beta0", "beta1", "sigma"))
-```
-
-```{r}
-plot(fit_WtHt300_mc, plotfun = "trace",
-     pars = c("beta0", "beta1", "sigma"))
-```
-
-```{r}
-print(fit_WtHt300_mc, pars = c("beta0", "beta1", "sigma"))
-```
-
-```{r}
-pairs(fit_WtHt300_mc, pars = c("beta0", "beta1", "sigma"))
-```
-
-```{r}
-plot(fit_WtHt300_mc, plotfun = "dens",
-     pars = c("beta0", "beta1", "sigma"))
-```
-
-```{r}
-plot(fit_WtHt300_mc, pars = c("beta0", "beta1", "sigma"))
+pairs(fit_HtWt30,
+      pars = c("sigma", "beta0", "beta1"))
 ```
 
 
 ## Posterior predictive check
 
-We'll just do this for the example with 30 observations.
-
 ```{r}
-y <- y30
-```
-
-Extract predicted values:
-
-```{r}
-samples_WtHt30 <- extract(fit_WtHt30)
-y_rep <- samples_WtHt30$y_rep
+y_sim_HtWt30 <- samples_HtWt30 %>%
+    select(starts_with("y_sim")) %>%
+    as.matrix()
 ```
 
 ```{r}
-ppc_hist(y, y_rep[1:5, ])
+ggplot(HtWtData30, aes(y = weight, x = height)) +
+    geom_point() +
+    geom_abline(data = samples_HtWt30,
+                aes(intercept = beta0, slope = beta1),
+                alpha = 0.01) +
+    geom_abline(data = samples_HtWt30,
+                aes(intercept = mean(beta0), slope = mean(beta1)),
+                color = "blue", linewidth = 2)
+```
+
+Compare to standard linear regression.
+
+```{r}
+ggplot(HtWtData30, aes(y = weight, x = height)) +
+    geom_point() +
+    geom_abline(data = samples_HtWt30,
+                aes(intercept = beta0, slope = beta1),
+                alpha = 0.01) +
+    geom_abline(data = samples_HtWt30,
+                aes(intercept = mean(beta0), slope = mean(beta1)),
+                color = "blue", linewidth = 2) +
+    geom_smooth(method = lm, color = "red", linewidth = 2)
 ```
 
 ```{r}
-ppc_boxplot(y, y_rep[1:5, ])
+ppc_intervals(y = HtWtData30$weight,
+              x = HtWtData30$height_mc,
+              yrep = y_sim_HtWt30,
+              prob = 0.68,
+              prob_outer = 0.95)
 ```
 
 ```{r}
-ppc_dens(y, y_rep[1:5, ])
+ppc_hist(y = HtWtData30$weight,
+         yrep = y_sim_HtWt30[1:19, ])
 ```
 
 ```{r}
-ppc_dens_overlay(y, y_rep[1:30, ])
+ppc_boxplot(y = HtWtData30$weight,
+            yrep = y_sim_HtWt30[1:10, ],
+            notch = FALSE)
 ```
 
 ```{r}
-ppc_stat_2d(y, y_rep)
+ppc_dens_overlay(y = HtWtData30$weight,
+                 yrep = y_sim_HtWt30[1:50, ])
+```
+
+```{r}
+ppc_stat_2d(y = HtWtData30$weight,
+            yrep = y_sim_HtWt30)
 ```
 
 
-## ShinyStan
 
-Run the following code from the Console:
+## The model with 300 observations
 
+In addition to the larger sample size, recall that we are fitting the model to the data with the mean-centered `height_mc` variable as the predictor.
+
+```{r, cache = TRUE}
+fit_HtWt300_mc <- sampling(HtWt,
+                           data = stan_data_300,
+                           seed = 11111,
+                           refresh = 0)
 ```
-launch_shinystan(fit_WtHt30)
+
+```{r}
+samples_HtWt300 <- tidy_draws(fit_HtWt300_mc)
+samples_HtWt300
+```
+
+## Model diagnostics
+
+```{r}
+stan_trace(fit_HtWt300_mc,
+           pars = c("sigma", "beta0", "beta1"))
+```
+
+```{r}
+mcmc_acf(fit_HtWt300_mc,
+         pars = c("sigma", "beta0", "beta1"))
+```
+
+
+## Model summary
+
+```{r}
+print(fit_HtWt300_mc,
+      pars = c("sigma", "beta0", "beta1"))
+```
+
+
+## Model visualization
+
+```{r}
+mcmc_areas(fit_HtWt300_mc, pars ="sigma")
+```
+
+```{r}
+mcmc_areas(fit_HtWt300_mc, pars ="beta0")
+```
+
+```{r}
+mcmc_areas(fit_HtWt300_mc, pars = "beta1")
+```
+
+Note that the correlation between `beta0` and `beta1` has disappeared. The intercept is now at the mean value of height and weight, so it's independent of the slope.
+
+```{r}
+pairs(fit_HtWt300_mc,
+      pars = c("sigma", "beta0", "beta1"))
+```
+
+
+## Posterior predictive check
+
+```{r}
+y_sim_HtWt300 <- samples_HtWt300 %>%
+    select(starts_with("y_sim")) %>%
+    as.matrix()
+```
+
+```{r}
+ggplot(HtWtData300, aes(y = weight, x = height_mc)) +
+    geom_point() +
+    geom_abline(data = samples_HtWt300,
+                aes(intercept = beta0, slope = beta1),
+                alpha = 0.01) +
+    geom_abline(data = samples_HtWt300,
+                aes(intercept = mean(beta0), slope = mean(beta1)),
+                color = "blue", linewidth = 2)
+```
+
+Compare to standard linear regression.
+
+```{r}
+ggplot(HtWtData300, aes(y = weight, x = height_mc)) +
+    geom_point() +
+    geom_abline(data = samples_HtWt300,
+                aes(intercept = beta0, slope = beta1),
+                alpha = 0.01) +
+    geom_abline(data = samples_HtWt300,
+                aes(intercept = mean(beta0), slope = mean(beta1)),
+                color = "blue", linewidth = 2) +
+    geom_smooth(method = lm, color = "red", linewidth = 2)
+```
+
+```{r}
+ppc_intervals(y = HtWtData300$weight,
+              x = HtWtData300$height_mc,
+              yrep = y_sim_HtWt300,
+              prob = 0.68,
+              prob_outer = 0.95)
+```
+
+```{r}
+ppc_hist(y = HtWtData300$weight,
+         yrep = y_sim_HtWt300[1:19, ])
+```
+
+```{r}
+ppc_boxplot(y = HtWtData300$weight,
+            yrep = y_sim_HtWt300[1:10, ],
+            notch = FALSE)
+```
+
+```{r}
+ppc_dens_overlay(y = HtWtData300$weight,
+                 yrep = y_sim_HtWt300[1:50, ])
+```
+
+```{r}
+ppc_stat_2d(y = HtWtData300$weight,
+            yrep = y_sim_HtWt300)
 ```
