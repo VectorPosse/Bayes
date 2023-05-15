@@ -184,6 +184,13 @@ ppc_hist(y = y1,
 
 The aim of the PPC is to compare the simulated data to the actual data. Here we note that the majority of simulations shown above produced fake data that is somewhat similar to the real data. Most of the simulations show more successes than failures. There is a great deal of variability in the posterior distribution, so we won't expect every simulation to produce exactly the same proportion of failures and successes. Nevertheless, we want to check that our posterior isn't making predictions that are wildly different from the real data. The posterior distribution should always be reasonably consistent with the data.
 
+Here is another way of looking at the simulated posterior data. The lighter bars show the failure and success counts in the actual data. The darker blue intervals are the middle 90% of all values obtained in the simulations. The center (median) dots are right on top of the data values, but in general, this need not be true. As long as the median dots are close to the top of the ligher bars, we know that the posterior predictions are close to the original data.
+
+```{r}
+ppc_bars(y = y1,
+         yrep = y_sim_bin_unif)
+```
+
 
 ## Normal prior
 
@@ -247,6 +254,7 @@ ppd_hist(ypred = y_sim_bin_norm1_prior[1:20,])
 
 These are decidedly less "random" than with the uniform prior. The $N(0.3, 0.1)$ prior here means that we expect a 30% "success" rate with only a little deviation from that. The prior predictive distribution represented above does, indeed, show that most simulated samples have a larger bar over 0 than 1.
 
+
 ### PPC (Posterior Predictive Check)
 
 As before, we modify the Stan model by adding a `generated quantities` block for simulating the new data given parameters values in the posterior.
@@ -304,6 +312,15 @@ ppc_hist(y = y1,
 ```
 
 We can see in the upper-left corner that the original data had a 66% success rate. Note that most (but not all) data sets simulated from the posterior seem to have a higher failure rate. It's no mystery why: the prior is quite strong and there isn't much data, so the posterior distribution still puts a lot more probability over the region $\theta < 0.5$. Therefore, most of the simulated data will have a higher number of failures.
+
+The intervals below show the same problem:
+
+```{r}
+ppc_bars(y = y1,
+         yrep = y_sim_bin_norm1)
+```
+
+The simulated data is still much closer to the prior than the actual data.
 
 In this case, we could graph the posterior distribution directly and see that it was closer to the prior than the likelihood. However, in more complex models, it may not be easy to visualize the posterior distribution directly. It will become increasingly important, then, that we perform a PPC to ensure that our posterior is reasonable. The PPC above shows us that our posterior *disagrees* with the data, which indicates a problem with our prior, or with our data, or both. In this case, we had a reasonably strong prior and not much data. The PPC alerts us to the fact that this might be an issue if we are trying to achieve reliable inference.
 
