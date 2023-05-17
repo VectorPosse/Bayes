@@ -6,7 +6,7 @@ output: html_notebook
 
 ## Preliminaries
 
-```{r, message = FALSE}
+```{r}
 library(tidyverse)
 ```
 
@@ -17,7 +17,7 @@ Grab your laptop with RStudio open, the tally sheet, and a writing utensil. All 
 
 1. Put a tally mark under your current pod's letter on the tally sheet. (You should make this mark even if you're stuck at the same pod for several turns. In other words, make a tally mark every time you repeat this set of steps.)
 
-2. Find your next "target" pod. If you are at an end pod ("A" closest to the computer desk or "F" closest to the door), look over at the pod (but don't move yet!) closest to you. In other words, if you are at pod "A", look over at pod "B", and if you're at pod "F", look over at pod "E". If you are in the middle of the room somewhere, flip a coin (found on each table). If heads, look at the next pod closer to the computer desk (earlier in the alphabet). If tails, look over at the next pod closer to the door (later in the alphabet).
+2. Find your next "target" pod. If you are at an end pod ("A" or "F"), look over at the pod closest to you, but don't move yet! In other words, if you are at pod "A", look over at pod "B", and if you're at pod "F", look over at pod "E". If you are in the middle of the room somewhere, flip a coin. If heads, look at the next pod earlier in the alphabet. If tails, look over at the next pod later in the alphabet.
 
 3.
 * If the number at your target pod is **bigger** than the number at your current pod:

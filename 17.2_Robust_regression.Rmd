@@ -106,6 +106,24 @@ data {
     vector<lower = 0>[N] y;
     vector[N] x;
 }
+transformed data{
+    real<lower = 0> alpha;
+    real<lower = 0> beta;
+    real M0;
+    real<lower = 0> S0;
+    real M1;
+    real<lower = 0> S1;
+    real<lower = 0> Rate;
+    
+    alpha = 2;       // default prior for df
+    beta = 0.1;
+    M0 = 150;        // Intercept between 100 and 200
+    S0 = 25;     
+    M1 = 0;          // -10 to 10 lbs per inch
+    S1 = 5;
+    Rate = 1.0/100;  // sd of 100 lbs
+    
+}
 generated quantities {
     real nu;
     real beta0;
@@ -114,11 +132,11 @@ generated quantities {
     real<lower = 0> sigma;
     real y_sim[N];
     
-    nu = gamma_rng(2, 0.1);       // default prior for df
-    beta0 = normal_rng(150, 25);  // Intercept between 100 and 200
-    beta1 = normal_rng(0, 5);    // -10 to 10 lbs per inch
+    nu = gamma_rng(alpha, beta);       
+    beta0 = normal_rng(M0, S0);  
+    beta1 = normal_rng(M1, S1);    
     mu = beta0 + beta1 * x;       // linear model
-    sigma = exponential_rng(1.0/100.0); // sd of 100 lbs
+    sigma = exponential_rng(Rate); 
     y_sim = student_t_rng(nu, mu, sigma);
 }
 ```
@@ -164,7 +182,7 @@ ggplot(HtWtData30, aes(y = weight, x = height_mc)) +
 
 ```{r}
 y_sim_HtWt30_prior <- samples_HtWt30_robust_prior %>%
-    select(starts_with("y_sim")) %>%
+    dplyr::select(starts_with("y_sim")) %>%
     as.matrix()
 ```
 
@@ -182,6 +200,24 @@ data {
     vector<lower = 0>[N] y;
     vector[N] x;
 }
+transformed data{
+    real<lower = 0> alpha;
+    real<lower = 0> beta;
+    real M0;
+    real<lower = 0> S0;
+    real M1;
+    real<lower = 0> S1;
+    real<lower = 0> Rate;
+    
+    alpha = 2;       // default prior for df
+    beta = 0.1;
+    M0 = 150;        // Intercept between 100 and 200
+    S0 = 25;     
+    M1 = 0;          // -10 to 10 lbs per inch
+    S1 = 5;
+    Rate = 1.0/100;  // sd of 100 lbs
+    
+}
 parameters {
     real nu;
     real beta0;
@@ -193,10 +229,10 @@ transformed parameters {
     mu = beta0 + beta1 * x;   // linear model
 }
 model {
-    nu ~ gamma(2, 0.1);       // default prior for df
-    beta0 ~ normal(150, 25);  // Intercept between 100 and 200
-    beta1 ~ normal(0, 5);    // -10 to 10 lbs per inch
-    sigma ~ exponential(1.0/100.0); // sd of 100 lbs
+    nu ~ gamma(alpha, beta);
+    beta0 ~ normal(M0, S0); 
+    beta1 ~ normal(M1, S1); 
+    sigma ~ exponential(Rate);
     y ~ student_t(nu, mu, sigma);
 }
 generated quantities {
@@ -227,6 +263,14 @@ stan_trace(fit_HtWt30_robust,
 ```{r}
 mcmc_acf(fit_HtWt30_robust,
          pars = c("nu", "sigma", "beta0", "beta1"))
+```
+
+```{r}
+mcmc_rhat(rhat(fit_HtWt30_robust))
+```
+
+```{r}
+mcmc_neff(neff_ratio(fit_HtWt30_robust))
 ```
 
 
@@ -266,7 +310,7 @@ pairs(fit_HtWt30_robust,
 
 ```{r}
 y_sim_HtWt30_robust <- samples_HtWt30_robust %>%
-    select(starts_with("y_sim")) %>%
+    dplyr::select(starts_with("y_sim")) %>%
     as.matrix()
 ```
 
@@ -335,8 +379,6 @@ ppc_stat_2d(y = HtWtData30$weight,
 ```
 
 
-
-
 ## The model with 300 observations
 
 ```{r, cache = TRUE}
@@ -363,6 +405,13 @@ mcmc_acf(fit_HtWt300_robust,
          pars = c("nu", "sigma", "beta0", "beta1"))
 ```
 
+```{r}
+mcmc_rhat(rhat(fit_HtWt300_robust))
+```
+
+```{r}
+mcmc_neff(neff_ratio(fit_HtWt300_robust))
+```
 
 ## Model summary
 
@@ -400,7 +449,7 @@ pairs(fit_HtWt300_robust,
 
 ```{r}
 y_sim_HtWt300_robust <- samples_HtWt300_robust %>%
-    select(starts_with("y_sim")) %>%
+    dplyr::select(starts_with("y_sim")) %>%
     as.matrix()
 ```
 

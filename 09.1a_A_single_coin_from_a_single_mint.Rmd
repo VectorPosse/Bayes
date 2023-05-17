@@ -13,9 +13,10 @@ This is the first of two models in Section 9.1 of Kruschke. It has a lot of unce
 
 Load necessary packages:
 
-```{r, message = FALSE}
+```{r}
+library(tidyverse)
 library(rstan)
-library(shinystan)
+library(tidybayes)
 library(bayesplot)
 ```
 
@@ -37,17 +38,100 @@ options(mc.cores = parallel::detectCores())
 ```{r}
 N <- 12
 y <- c(rep(1, 9), rep(0, 3)) # 9 heads, 3 tails
+y
+```
+
+```{r}
 stan_data <- list(N = N, y = y)
 ```
 
 
-## Stan code
+## Prior
 
-We use the `transformed data` block to define constants in our model: $A_{\omega}$ and $B_{\omega}$, the parameters for our beta hyperprior, and $K$, the *concentration* that reflects how tightly $\theta$ should stay to the mode $\omega$.
+### Simulation code
 
-We use the `transformed parameters` block to define the parameters $a$ and $b$ of the beta prior for $\theta$. This is not strictly necessary, but it makes the `model` block much easier to read.
+We use the `transformed data` block to define constants in our model: $A_{\omega}$ and $B_{\omega}$, the parameters for our beta hyperprior, and $K$, the *concentration* that reflects how tightly $\theta$ should stay to the mode $\omega$. We also define the parameters $a$ and $b$ of the beta prior for $\theta$. This is not strictly necessary, but it makes the code much easier to read.
 
-The `generated quantities` block uses a function that generates a Bernoulli distribution (either 1 or 0 for success or failure) given a probability of success $\theta$. In Stan, this block is run once every time the MCMC process accepts a target; for the value of $\theta$ that happens to be sampled in that round, the `for` loop generates $N$ "coin flips" given that value of $\theta$. The idea is that this becomes "fake data" generated from the posterior distrubution. It's used in a posterior predictive check to make sure that the fake data generated from the posterior is consistent with the actual data we have. (Keep in mind, though, that it won't be a perfect match; after all, the posterior is a compromise between the prior and the likelihood.)
+The `for` loop at the end uses a function that generates a Bernoulli distribution (either 1 or 0 for success or failure) given a probability of success $\theta$. In Stan, this block is run once every time the MCMC process accepts a target; for the value of $\theta$ that happens to be sampled in that round, the `for` loop generates $N$ "coin flips" given that value of $\theta$. The idea is that this becomes "fake data" generated from the prior distribution.
+
+```{stan, output.var = "scsma_prior", cache = TRUE}
+data {
+    int<lower = 0> N;
+    vector<lower = 0>[N] y;
+}
+transformed data {
+    real<lower = 0> A_omega;
+    real<lower = 0> B_omega;
+    real<lower = 0> K;
+
+    A_omega = 2;   // hyperprior parameters
+    B_omega = 2;
+    K = 100;       // concentration
+}
+generated quantities {
+    real<lower = 0, upper = 1> omega;
+    real<lower = 0, upper = 1> theta;
+    real<lower = 0> a;
+    real<lower = 0> b;
+    int<lower = 0, upper = 1> y_sim[N];
+    
+    omega = beta_rng(A_omega, B_omega); // mode
+    a = omega * (K - 2) + 1;
+    b = (1 - omega) * (K - 2) + 1;
+    theta = beta_rng(a, b);  // probability of success
+    
+    for (n in 1:N) {
+        y_sim[n] = bernoulli_rng(theta);
+    }
+}
+```
+
+```{r, cache = TRUE}
+fit_scsma_prior <- sampling(scsma_prior,
+                            data = stan_data,
+                            chains = 1,
+                            algorithm = "Fixed_param",
+                            seed = 11111,
+                            refresh = 0)
+```
+
+```{r}
+samples_scsma_prior <- tidy_draws(fit_scsma_prior)
+samples_scsma_prior
+```
+
+### Examine prior
+
+```{r}
+mcmc_hist(samples_scsma_prior,
+          pars = c("omega", "theta"))
+```
+
+No surprise that `omega` and `theta` are highly correlated:
+
+```{r}
+mcmc_pairs(fit_scsma_prior,
+           pars = c("omega", "theta"))
+```
+
+### Prior predictive distribution
+
+```{r}
+y_sim_scsma_prior <- samples_scsma_prior %>%
+    dplyr::select(starts_with("y_sim")) %>%
+    as.matrix()
+```
+
+```{r}
+ppd_hist(ypred = y_sim_scsma_prior[1:20,])
+```
+
+There is a wide variety of outcomes, as expected from a relatively weak prior.
+
+
+## Model
+
+In the model code below, we list `omega` and `theta` as the parameters of interest. The `a` and `b` parameters are defined in the `transformed parameters` block. They make the model easier to read, but they are not the main objects of our inference.
 
 ```{stan, output.var = "scsma", cache = TRUE}
 data {
@@ -55,13 +139,13 @@ data {
     int<lower = 0, upper = 1> y[N];
 }
 transformed data {
-    real<lower = 0> A_omega;
+    real<lower = 0> A_omega;  
     real<lower = 0> B_omega;
-    real<lower = 0> K;
+    real<lower = 0> K;        
 
-    A_omega = 2;
+    A_omega = 2;   // hyperprior parameters
     B_omega = 2;
-    K = 100;
+    K = 100;       // concentration
 }
 parameters {
     real<lower = 0, upper = 1> omega;
@@ -75,136 +159,86 @@ transformed parameters {
     b = (1 - omega) * (K - 2) + 1;
 }
 model {
-    omega ~ beta(A_omega, B_omega);
-    theta ~ beta(a, b);
-    y ~ bernoulli(theta);
+    omega ~ beta(A_omega, B_omega);  // hyperprior for mode
+    theta ~ beta(a, b);              // prior prob of success
+    y ~ bernoulli(theta);            // likelihood
 }
 generated quantities {
-    int<lower = 0, upper = 1> y_rep[N];
+    int<lower = 0, upper = 1> y_sim[N];
     
     for (n in 1:N) {
-        y_rep[n] = bernoulli_rng(theta);
+        y_sim[n] = bernoulli_rng(theta);
     }
 }
 ```
 
-
-## Sampling from the model
-
-```{r}
-set.seed(11111)
-fit_scsma <- sampling(scsma, data = stan_data, refresh = 0)
-```
-
-
-## Diagnosing the model
-
-```{r}
-plot(fit_scsma, plotfun = "ac", pars = c("omega", "theta"))
+```{r, cache = TRUE}
+fit_scsma <- sampling(scsma,
+                      data = stan_data,
+                      seed = 11111,
+                      refresh = 0)
 ```
 
 ```{r}
-plot(fit_scsma, plotfun = "trace",
-     pars = c("omega", "theta"))
+samples_scsma <- tidy_draws(fit_scsma)
+samples_scsma
 ```
 
-
-## Summarizing the model
-
-```{r}
-fit_scsma
-```
-
-
-## Visualizing the model
+## Model diagnostics
 
 ```{r}
-pairs(fit_scsma, pars = c("omega", "theta"))
+stan_trace(fit_scsma,
+           pars = c("omega", "theta"))
 ```
 
 ```{r}
-plot(fit_scsma, pars = c("omega", "theta"))
-```
-
-
-## Examining the prior
-
-Everything is the same here except the likelihood is commented out. (Also the `generated quantities` block is removed. In theory, that block could have been kept, and the fake data it would have generated is often called the "prior predictive distibution".)
-
-```{stan, output.var = "scsma_prior", cache = TRUE}
-data {
-    int<lower = 0> N;
-    int<lower = 0, upper = 1> y[N];
-}
-transformed data {
-    real<lower = 0> A_omega;
-    real<lower = 0> B_omega;
-    real<lower = 0> K;
-
-    A_omega = 2;
-    B_omega = 2;
-    K = 100;
-}
-parameters {
-    real<lower = 0, upper = 1> omega;
-    real<lower = 0, upper = 1> theta;
-}
-transformed parameters {
-    real<lower = 0> a;
-    real<lower = 0> b;
-    
-    a = omega * (K - 2) + 1;
-    b = (1 - omega) * (K - 2) + 1;
-}
-model {
-    omega ~ beta(A_omega, B_omega);
-    theta ~ beta(a, b);
-//    y ~ bernoulli(theta);
-}
+mcmc_acf(fit_scsma,
+         pars = c("omega", "theta"))
 ```
 
 ```{r}
-set.seed(11111)
-fit_scsma_prior <- sampling(scsma_prior, data = stan_data, refresh = 0)
+mcmc_rhat(rhat(fit_scsma))
 ```
 
 ```{r}
-fit_scsma_prior
+mcmc_neff(neff_ratio(fit_scsma))
+```
+
+
+## Model summary
+
+```{r}
+print(fit_scsma,
+      pars = c("omega", "theta"))
+```
+
+
+## Model visualization
+
+```{r}
+mcmc_areas(fit_scsma, pars = c("omega", "theta"))
 ```
 
 ```{r}
-pairs(fit_scsma_prior, pars = c("omega", "theta"))
+pairs(fit_scsma,
+      pars = c("omega", "theta"))
 ```
-
-```{r}
-plot(fit_scsma_prior, pars = c("omega", "theta"))
-```
-
-All of the above shows that the value of $\theta$ is stongly dependent on the value of $\omega$, the prior mode.
 
 
 ## Posterior predictive check
 
-Extract predicted values:
+```{r}
+y_sim_scsma <- samples_scsma %>%
+    dplyr::select(starts_with("y_sim")) %>%
+    as.matrix()
+```
 
 ```{r}
-samples_scsma <- extract(fit_scsma)
-y_rep <- samples_scsma$y_rep
+ppc_hist(y = y,
+         yrep = y_sim_scsma[1:19, ])
 ```
-
-Graph values of $y$ against summaries of $y_{rep}$:
 
 ```{r}
-ppc_bars(y, y_rep)
-```
-
-The bars represent the actual data (9 heads, 3 tails) whereas the dots with error bars represent the range of values in the simulated data from the posterior predictive distribution. Notice the "shrinkage": the posterior predictions are pulled closer to 50% since that was the mode of the prior.
-
-
-## ShinyStan
-
-Run the following code from the Console:
-
-```
-launch_shinystan(fit_scsma)
+ppc_bars(y = y,
+         yrep = y_sim_scsma)
 ```
