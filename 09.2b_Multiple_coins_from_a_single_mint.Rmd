@@ -13,9 +13,10 @@ This is the second of three models in Section 9.2 of Kruschke. It makes a weak c
 
 Load necessary packages:
 
-```{r, message = FALSE}
+```{r}
+library(tidyverse)
 library(rstan)
-library(shinystan)
+library(tidybayes)
 library(bayesplot)
 ```
 
@@ -34,6 +35,8 @@ options(mc.cores = parallel::detectCores())
 
 ## Data
 
+Record the total number of successes (heads) from each coin.
+
 ```{r}
 S <- 2 # 2 coins
 N1 <- 15
@@ -42,115 +45,125 @@ N <- c(N1, N2)
 y1 <- 3 # 3 heads (of 15)
 y2 <- 4 # 4 heads (of 5)
 y <- c(y1, y2)
+```
+
+```{r}
 stan_data <- list(S = S, N = N, y = y)
 ```
 
 
-## Stan code
+## Prior
 
-The only thing different here are the values of $A_{\omega}$, $B_{\omega}$, and $K$.
-
-```{stan, output.var = "mcsmb", cache = TRUE}
-data {
-    int<lower = 0> S;
-    int<lower = 0> N[S];
-    int<lower = 0> y[S];
-}
-transformed data {
-    real<lower = 0> A_omega;
-    real<lower = 0> B_omega;
-    real<lower = 0> K;
-
-    A_omega = 2;
-    B_omega = 2;
-    K = 75;
-}
-parameters {
-    real<lower = 0, upper = 1> omega;
-    real<lower = 0, upper = 1> theta[S];
-}
-transformed parameters {
-    real<lower = 0> a;
-    real<lower = 0> b;
-    
-    a = omega * (K - 2) + 1;
-    b = (1 - omega) * (K - 2) + 1;
-}
-model {
-    omega ~ beta(A_omega, B_omega);
-    theta ~ beta(a, b);
-    y ~ binomial(N, theta);
-}
-generated quantities {
-    int<lower = 0> y_rep[S];
-    
-    for (s in 1:S) {
-        y_rep[s] = binomial_rng(N[s], theta[s]);
-    }
-}
-```
-
-
-## Sampling from the model
-
-```{r}
-set.seed(11111)
-fit_mcsmb <- sampling(mcsmb, data = stan_data, refresh = 0)
-```
-
-
-## Diagnosing the model
-
-```{r}
-plot(fit_mcsmb, plotfun = "ac", pars = c("omega", "theta"))
-```
-
-```{r}
-plot(fit_mcsmb, plotfun = "trace",
-     pars = c("omega", "theta"))
-```
-
-
-## Summarizing the model
-
-```{r}
-fit_mcsmb
-```
-
-
-## Visualizing the model
-
-```{r}
-pairs(fit_mcsmb, pars = c("omega", "theta"))
-```
-
-```{r}
-plot(fit_mcsmb, pars = c("omega", "theta"))
-```
-
-With a much larger value of $K$, the values of $\theta$ are much more constrained to follow the value of $\omega$ from the prior.
-
-
-## Examining the prior
+### Simulation code
 
 ```{stan, output.var = "mcsmb_prior", cache = TRUE}
 data {
     int<lower = 0> S;
-    int<lower = 0> N[S];
-    int<lower = 0> y[S];
+    array[S] int<lower = 0> N;
+    array[S] int<lower = 0> y;
 }
 transformed data {
     real<lower = 0> A_omega;
     real<lower = 0> B_omega;
     real<lower = 0> K;
 
-    A_omega = 2;
+    A_omega = 2;   // hyperprior parameters
     B_omega = 2;
-    K = 75;
+    K = 75;        // concentration
+}
+generated quantities {
+    real<lower = 0, upper = 1> omega;
+    array[S] real<lower = 0, upper = 1> theta;
+    real<lower = 0> a;
+    real<lower = 0> b;
+    array[S] int<lower = 0> y_sim;
+    
+    omega = beta_rng(A_omega, B_omega);  // mode
+    a = omega * (K - 2) + 1;
+    b = (1 - omega) * (K - 2) + 1;
+        
+    for (s in 1:S) {
+        theta[s] = beta_rng(a, b);  // probability of success
+    }
+
+    y_sim = binomial_rng(N, theta); // vectorized
+}
+```
+
+```{r, cache = TRUE}
+fit_mcsmb_prior <- sampling(mcsmb_prior,
+                            data = stan_data,
+                            chains = 1,
+                            algorithm = "Fixed_param",
+                            seed = 11111,
+                            refresh = 0)
+```
+
+```{r}
+samples_mcsmb_prior <- tidy_draws(fit_mcsmb_prior)
+samples_mcsmb_prior
+```
+
+Use proportions of successes rather than counts:
+
+```{r}
+samples_mcsmb_prior <- samples_mcsmb_prior %>%
+        mutate(`y_sim_prop[1]` = `y_sim[1]`/ N[1],
+               `y_sim_prop[2]` = `y_sim[2]`/ N[2])
+samples_mcsmb_prior
+```
+
+
+### Examine prior
+
+```{r}
+mcmc_hist(samples_mcsmb_prior,
+          pars = "omega")
+```
+
+```{r}
+mcmc_hist(samples_mcsmb_prior,
+          pars = vars(starts_with("theta")))
+```
+
+```{r}
+mcmc_pairs(fit_mcsmb_prior,
+           pars = vars(starts_with(c("omega", "theta"))))
+```
+
+### Prior predictive distribution
+
+```{r}
+y_sim_mcsmb_prior <- samples_mcsmb_prior %>%
+    dplyr::select(starts_with("y_sim_prop")) %>%
+    as.matrix()
+```
+
+```{r}
+ppd_intervals(ypred = y_sim_mcsmb_prior)
+```
+
+
+## Model
+
+```{stan, output.var = "mcsmb", cache = TRUE}
+data {
+    int<lower = 0> S;
+    array[S] int<lower = 0> N;
+    array[S] int<lower = 0> y;
+}
+transformed data {
+    real<lower = 0> A_omega;
+    real<lower = 0> B_omega;
+    real<lower = 0> K;         
+
+    A_omega = 2;   // hyperprior parameters
+    B_omega = 2;
+    K = 75;        // concentration
 }
 parameters {
     real<lower = 0, upper = 1> omega;
-    real<lower = 0, upper = 1> theta[S];
+    array[S] real<lower = 0, upper = 1> theta;
 }
 transformed parameters {
     real<lower = 0> a;
@@ -160,64 +173,107 @@ transformed parameters {
     b = (1 - omega) * (K - 2) + 1;
 }
 model {
-    omega ~ beta(A_omega, B_omega);
-    theta ~ beta(a, b);
-//    y ~ binomial(N, theta);
+    omega ~ beta(A_omega, B_omega);  // hyperprior for mode
+    theta ~ beta(a, b);              // prior prob of success
+    y ~ binomial(N, theta);          // likelihood
+}
+generated quantities {
+    array[S] int<lower = 0> y_sim;
+    
+    y_sim = binomial_rng(N, theta);
 }
 ```
 
-```{r}
-set.seed(11111)
-fit_mcsmb_prior <- sampling(mcsmb_prior, data = stan_data, refresh = 0)
+```{r, cache = TRUE}
+fit_mcsmb <- sampling(mcsmb,
+                      data = stan_data, 
+                      seed = 11111,
+                      refresh = 0)
 ```
 
 ```{r}
-fit_mcsmb_prior
+samples_mcsmb <- tidy_draws(fit_mcsmb)
+samples_mcsmb
+```
+
+Again, we'll compute proportions:
+
+```{r}
+samples_mcsmb <- samples_mcsmb %>%
+    mutate(`y_sim_prop[1]` = `y_sim[1]`/ N[1],
+           `y_sim_prop[2]` = `y_sim[2]`/ N[2])
+samples_mcsmb
+```
+
+
+## Model diagnostics
+
+```{r}
+stan_trace(fit_mcsmb,
+           pars = c("omega", "theta"))
 ```
 
 ```{r}
-pairs(fit_mcsmb_prior, pars = c("omega", "theta"))
+mcmc_acf(fit_mcsmb,
+         pars = vars(starts_with(c("omega", "theta"))))
 ```
 
 ```{r}
-plot(fit_mcsmb_prior, pars = c("omega", "theta"))
+mcmc_rhat(rhat(fit_mcsmb))
+```
+
+```{r}
+mcmc_neff(neff_ratio(fit_mcsmb))
+```
+
+
+## Model summary
+
+```{r}
+print(fit_mcsmb,
+      pars = c("omega", "theta"))
+```
+
+
+## Model visualization
+
+```{r}
+mcmc_areas(fit_mcsmb,
+           pars = vars(starts_with(c("omega", "theta"))))
+```
+
+```{r}
+pairs(fit_mcsmb,
+      pars = c("omega", "theta"))
 ```
 
 
 ## Posterior predictive check
 
-Extract predicted values:
-
 ```{r}
-samples_mcsmb <- extract(fit_mcsmb)
-y_rep <- samples_mcsmb$y_rep
-```
-
-Graph values of $y$ against summaries of $y_{rep}$.
-
-(The `ppc_stat` function requires a matrix as input, so we have to convert the single columns of values in `y_rep[, 1]` to a 4000 by 1 matrix.)
-
-```{r}
-ppc_stat(y[1], as.matrix(y_rep[ , 1]))
+y_sim_mcsmb <- samples_mcsmb %>%
+    dplyr::select(starts_with("y_sim_prop")) %>%
+    as.matrix()
 ```
 
 ```{r}
-ppc_stat(y[2], as.matrix(y_rep[ , 2]))
+ppc_intervals(y = y / N,
+              yrep = y_sim_mcsmb)
 ```
 
-The $x$ value in the graph below simply identifies the two coins.
+Notice the partial pooling is even more pronounced than before due to the strong prior dependence of $\theta$ on $\omega$. And while $\omega$ was centered at 0.5, it was a weak prior, so the larger amount of data for coin 1 has pulled the estimate for $\omega$ down---and that, in turn, pulls the estimates down for both values of $\theta$ as well.
+
+Coin 1:
 
 ```{r}
-ppc_intervals(y, y_rep)
+ppc_stat(y = y[1] / N[1],
+         yrep = as.matrix(y_sim_mcsmb[ , 1]))
 ```
 
-Here there is a lot more shrinkage because the values of $\theta$ (from which the posterior draws are taken) are much closer to 50% for each coin.
+Coin 2:
 
-
-## ShinyStan
-
-Run the following code from the Console:
-
+```{r}
+ppc_stat(y = y[2] / N[2],
+         yrep = as.matrix(y_sim_mcsmb[ , 2]))
 ```
-launch_shinystan(fit_mcsmb)
-```
+

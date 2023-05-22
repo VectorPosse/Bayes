@@ -55,7 +55,7 @@ This is the same code as in 9.1(a) except that the values of $A_{\omega}$, $B_{\
 ```{stan, output.var = "scsmb_prior", cache = TRUE}
 data {
     int<lower = 0> N;
-    vector<lower = 0>[N] y;
+    array[N] int<lower = 0, upper = 1> y;
 }
 transformed data {
     real<lower = 0> A_omega;
@@ -71,7 +71,7 @@ generated quantities {
     real<lower = 0, upper = 1> theta;
     real<lower = 0> a;
     real<lower = 0> b;
-    int<lower = 0, upper = 1> y_sim[N];
+    array[N] int<lower = 0, upper = 1> y_sim;
     
     omega = beta_rng(A_omega, B_omega); // mode
     a = omega * (K - 2) + 1;
@@ -130,7 +130,7 @@ ppd_hist(ypred = y_sim_scsmb_prior[1:20,])
 ```{stan, output.var = "scsmb", cache = TRUE}
 data {
     int<lower = 0> N;
-    int<lower = 0, upper = 1> y[N];
+    array[N] int<lower = 0, upper = 1> y;
 }
 transformed data {
     real<lower = 0> A_omega;  
@@ -158,7 +158,7 @@ model {
     y ~ bernoulli(theta);            // likelihood
 }
 generated quantities {
-    int<lower = 0, upper = 1> y_sim[N];
+    array[N] int<lower = 0, upper = 1> y_sim;
     
     for (n in 1:N) {
         y_sim[n] = bernoulli_rng(theta);

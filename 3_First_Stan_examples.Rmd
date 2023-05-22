@@ -85,7 +85,7 @@ We also use the option `cache = TRUE` in the header of the code chunk. This chun
 ```{stan, output.var = "bin_unif", cache = TRUE}
 data {
     int<lower = 0> N;
-    int<lower = 0, upper = 1> y[N];
+    array[N] int<lower = 0, upper = 1> y;
 }
 parameters {
     real<lower = 0, upper = 1> theta;
@@ -102,11 +102,11 @@ Let's take a closer look at various pieces of the Stan code. Here is the `data` 
 ```
 data {
     int<lower = 0> N;
-    int<lower = 0, upper = 1> y[N];
+    array[N] int<lower = 0, upper = 1> y;
 }
 ```
 
-Notice that the two variables declared here are precisely the variables in the list `stan_data` (namely, `N`, and `y`). The `lower` and/or `upper` bounds in the definitions just serve as a check to make sure we are passing in data of the right form. (If invalid data is passed to Stan, the program will stop with an error.) The notation `y[N]` means that the variable `y` should be an array of `N` integers.
+Notice that the two variables declared here are precisely the variables in the list `stan_data` (namely, `N`, and `y`). The `lower` and/or `upper` bounds in the definitions just serve as a check to make sure we are passing in data of the right form. (If invalid data is passed to Stan, the program will stop with an error.) The notation `array[N]` means that the variable `y` should be an array of `N` integers.
 
 The `parameters` block is
 
@@ -206,7 +206,7 @@ in the `model` block.
 ```{stan, output.var = "bin_norm1", cache = TRUE}
 data {
     int<lower = 0> N;
-    int<lower = 0, upper = 1> y[N];
+    array[N] int<lower = 0, upper = 1> y;
 }
 parameters {
     real<lower = 0, upper = 1> theta;
@@ -249,7 +249,7 @@ In the code chunk below, we make the necessary change.
 ```{stan, output.var = "bin_norm2", cache = TRUE}
 data {
     int<lower = 0> N;
-    int<lower = 0, upper = 1> y[N];
+    array[N] int<lower = 0, upper = 1> y;
 }
 parameters {
     real<lower = 0, upper = 1> theta;

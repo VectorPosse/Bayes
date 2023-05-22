@@ -13,9 +13,10 @@ This is the first of three models in Section 9.2 of Kruschke. It makes a weak cl
 
 Load necessary packages:
 
-```{r, message = FALSE}
+```{r}
+library(tidyverse)
 library(rstan)
-library(shinystan)
+library(tidybayes)
 library(bayesplot)
 ```
 
@@ -44,32 +45,161 @@ N <- c(N1, N2)
 y1 <- 3 # 3 heads (of 15)
 y2 <- 4 # 4 heads (of 5)
 y <- c(y1, y2)
+```
+
+```{r}
 stan_data <- list(S = S, N = N, y = y)
 ```
 
 
-## Stan code
+## Prior
 
-To accomodate the different form of the data, we define `S` to be the number of coins (2 here, but this could be generalized to any number of coins) and create arrays `N[S]` and `y[S]` to hold the number of trials and the number of heads.
+### Simulation code
 
-```{stan, output.var = "mcsma", cache = TRUE}
+To accommodate the different form of the data, we define `S` to be the number of coins (2 here, but this could be generalized to any number of coins) and create arrays `N[S]` and `y[S]` to hold the number of trials and the number of heads.
+
+This means that, instead of the Bernoulli distribution (0s and 1s with probability $\theta$), we will have the binomial distribution (total number of successes in a sample of size N with probability $\theta$).
+
+There is a subtlety below. In the `generated quantities` block, we see
+
+```
+for (s in 1:S) {
+        theta[s] = beta_rng(a, b);  // probability of success
+    }
+```
+
+There are two thetas (one for each coin), so this makes sense. However, we also see
+
+```
+y_sim = binomial_rng(N, theta); // vectorized
+```
+
+There are also two values of `y_sim`, but we don't put this in a `for` loop. That's because Stan is capable of "vectorization": since there are two values of `N` and two values of `theta` on the right, Stan knows to expect two values of `y_sim` as well, without the need to index explicitly.
+
+```{stan, output.var = "mcsma_prior", cache = TRUE}
 data {
     int<lower = 0> S;
-    int<lower = 0> N[S];
-    int<lower = 0> y[S];
+    array[S] int<lower = 0> N;
+    array[S] int<lower = 0> y;
 }
 transformed data {
     real<lower = 0> A_omega;
     real<lower = 0> B_omega;
     real<lower = 0> K;
 
-    A_omega = 2;
+    A_omega = 2;   // hyperprior parameters
     B_omega = 2;
-    K = 5;
+    K = 5;         // concentration
+}
+generated quantities {
+    real<lower = 0, upper = 1> omega;
+    array[S] real<lower = 0, upper = 1> theta;
+    real<lower = 0> a;
+    real<lower = 0> b;
+    array[S] int<lower = 0> y_sim;
+    
+    omega = beta_rng(A_omega, B_omega);  // mode
+    a = omega * (K - 2) + 1;
+    b = (1 - omega) * (K - 2) + 1;
+        
+    for (s in 1:S) {
+        theta[s] = beta_rng(a, b);  // probability of success
+    }
+
+    y_sim = binomial_rng(N, theta); // vectorized
+}
+```
+
+```{r, cache = TRUE}
+fit_mcsma_prior <- sampling(mcsma_prior,
+                            data = stan_data,
+                            chains = 1,
+                            algorithm = "Fixed_param",
+                            seed = 11111,
+                            refresh = 0)
+```
+
+```{r}
+samples_mcsma_prior <- tidy_draws(fit_mcsma_prior)
+samples_mcsma_prior
+```
+
+For PPD visualization, it is nice to have proportions of successes rather than counts:
+
+```{r}
+samples_mcsma_prior <- samples_mcsma_prior %>%
+        mutate(`y_sim_prop[1]` = `y_sim[1]`/ N[1],
+               `y_sim_prop[2]` = `y_sim[2]`/ N[2])
+samples_mcsma_prior
+```
+
+
+### Examine prior
+
+```{r}
+mcmc_hist(samples_mcsma_prior,
+          pars = "omega")
+```
+
+```{r}
+mcmc_hist(samples_mcsma_prior,
+          pars = vars(starts_with("theta")))
+```
+
+```{r}
+mcmc_pairs(fit_mcsma_prior,
+           pars = vars("omega", starts_with("theta")))
+```
+
+### Prior predictive distribution
+
+```{r}
+y_sim_mcsma_prior <- samples_mcsma_prior %>%
+    dplyr::select(starts_with("y_sim_prop")) %>%
+    as.matrix()
+```
+
+```{r}
+ppd_intervals(ypred = y_sim_mcsma_prior)
+```
+
+
+## Model
+
+Another subtlety here: in the `mcsma_prior` Stan code, we had 
+
+```
+for (s in 1:S) {
+        theta[s] = beta_rng(a, b);  // probability of success
+    }
+```
+
+However, in the code below, we see just
+
+```
+theta ~ beta(a, b);              // prior prob of success
+```
+
+This is also vectorized code; Stan knows there are two values of `theta` that need to be sampled. So why did we use a `for` loop in the code for the prior, but not here? It turns out to be a weird Stan feature. In the `generated quantities` block, Stan does not recognize that `theta` is a vector because the right-hand side has no vector quantities. (The parameters `a` and `b` are just constants.) But in the `model` block, for some reason, Stan can figure out that you want two values of `theta`.
+
+```{stan, output.var = "mcsma", cache = TRUE}
+data {
+    int<lower = 0> S;
+    array[S] int<lower = 0> N;
+    array[S] int<lower = 0> y;
+}
+transformed data {
+    real<lower = 0> A_omega;
+    real<lower = 0> B_omega;
+    real<lower = 0> K;         
+
+    A_omega = 2;   // hyperprior parameters
+    B_omega = 2;
+    K = 5;         // concentration
 }
 parameters {
     real<lower = 0, upper = 1> omega;
-    real<lower = 0, upper = 1> theta[S];
+    array[S] real<lower = 0, upper = 1> theta;
 }
 transformed parameters {
     real<lower = 0> a;
@@ -79,147 +209,110 @@ transformed parameters {
     b = (1 - omega) * (K - 2) + 1;
 }
 model {
-    omega ~ beta(A_omega, B_omega);
-    theta ~ beta(a, b);
-    y ~ binomial(N, theta);
+    omega ~ beta(A_omega, B_omega);  // hyperprior for mode
+    theta ~ beta(a, b);              // prior prob of success
+    y ~ binomial(N, theta);          // likelihood
 }
 generated quantities {
-    int<lower = 0> y_rep[S];
+    array[S] int<lower = 0> y_sim;
     
-    for (s in 1:S) {
-        y_rep[s] = binomial_rng(N[s], theta[s]);
-    }
+    y_sim = binomial_rng(N, theta);
 }
 ```
 
-
-## Sampling from the model
-
-```{r}
-set.seed(11111)
-fit_mcsma <- sampling(mcsma, data = stan_data, refresh = 0)
-```
-
-
-## Diagnosing the model
-
-```{r}
-plot(fit_mcsma, plotfun = "ac", pars = c("omega", "theta"))
+```{r, cache = TRUE}
+fit_mcsma <- sampling(mcsma,
+                      data = stan_data, 
+                      seed = 11111,
+                      refresh = 0)
 ```
 
 ```{r}
-plot(fit_mcsma, plotfun = "trace",
-     pars = c("omega", "theta"))
+samples_mcsma <- tidy_draws(fit_mcsma)
+samples_mcsma
+```
+
+Again, we'll compute proportions:
+
+```{r}
+samples_mcsma <- samples_mcsma %>%
+    mutate(`y_sim_prop[1]` = `y_sim[1]`/ N[1],
+           `y_sim_prop[2]` = `y_sim[2]`/ N[2])
+samples_mcsma
 ```
 
 
-## Summarizing the model
+## Model diagnostics
 
 ```{r}
-fit_mcsma
-```
-
-
-## Visualizing the model
-
-```{r}
-pairs(fit_mcsma, pars = c("omega", "theta"))
+stan_trace(fit_mcsma,
+           pars = c("omega", "theta"))
 ```
 
 ```{r}
-plot(fit_mcsma, pars = c("omega", "theta"))
+mcmc_acf(fit_mcsma,
+         pars = vars("omega", starts_with("theta")))
+```
+
+```{r}
+mcmc_rhat(rhat(fit_mcsma))
+```
+
+```{r}
+mcmc_neff(neff_ratio(fit_mcsma))
+```
+
+
+## Model summary
+
+```{r}
+print(fit_mcsma,
+      pars = c("omega", "theta"))
+```
+
+
+## Model visualization
+
+```{r}
+mcmc_areas(fit_mcsma,
+           pars = vars("omega", starts_with("theta")))
+```
+
+```{r}
+pairs(fit_mcsma,
+      pars = c("omega", "theta"))
 ```
 
 With a weak prior on $\omega$, the data from each coin pulls its respective value of $\theta$ closer to the proportion of successes for that coin.
 
 
-## Examining the prior
-
-```{stan, output.var = "mcsma_prior", cache = TRUE}
-data {
-    int<lower = 0> S;
-    int<lower = 0> N[S];
-    int<lower = 0> y[S];
-}
-transformed data {
-    real<lower = 0> A_omega;
-    real<lower = 0> B_omega;
-    real<lower = 0> K;
-
-    A_omega = 2;
-    B_omega = 2;
-    K = 5;
-}
-parameters {
-    real<lower = 0, upper = 1> omega;
-    real<lower = 0, upper = 1> theta[S];
-}
-transformed parameters {
-    real<lower = 0> a;
-    real<lower = 0> b;
-    
-    a = omega * (K - 2) + 1;
-    b = (1 - omega) * (K - 2) + 1;
-}
-model {
-    omega ~ beta(A_omega, B_omega);
-    theta ~ beta(a, b);
-//    y ~ binomial(N, theta);
-}
-```
-
-```{r}
-set.seed(11111)
-fit_mcsma_prior <- sampling(mcsma_prior, data = stan_data, refresh = 0)
-```
-
-```{r}
-fit_mcsma_prior
-```
-
-```{r}
-pairs(fit_mcsma_prior, pars = c("omega", "theta"))
-```
-
-```{r}
-plot(fit_mcsma_prior, pars = c("omega", "theta"))
-```
-
-
 ## Posterior predictive check
 
-Extract predicted values:
-
 ```{r}
-samples_mcsma <- extract(fit_mcsma)
-y_rep <- samples_mcsma$y_rep
-```
-
-Graph values of $y$ against summaries of $y_{rep}$.
-
-(The `ppc_stat` function requires a matrix as input, so we have to convert the single columns of values in `y_rep[, 1]` to a 4000 by 1 matrix.)
-
-```{r}
-ppc_stat(y[1], as.matrix(y_rep[ , 1]))
+y_sim_mcsma <- samples_mcsma %>%
+    dplyr::select(starts_with("y_sim_prop")) %>%
+    as.matrix()
 ```
 
 ```{r}
-ppc_stat(y[2], as.matrix(y_rep[ , 2]))
+ppc_intervals(y = y / N,
+              yrep = y_sim_mcsma)
 ```
 
-The $x$ value in the graph below simply identifies the two coins.
+Notice the partial pooling (or "shrinkage"): the sampled data is pulled toward 50%, the assumption in the prior. Coin 1, with a lot more data, is pulled less than coin 2. 
+
+Coin 1:
 
 ```{r}
-ppc_intervals(y, y_rep)
+ppc_stat(y = y[1] / N[1],
+         yrep = as.matrix(y_sim_mcsma[ , 1]))
 ```
 
-Notice the shrinkage: the replicated data is partway between the actual data and the prior for each coin.
+Coin 2:
 
-
-## ShinyStan
-
-Run the following code from the Console:
-
+```{r}
+ppc_stat(y = y[2] / N[2],
+         yrep = as.matrix(y_sim_mcsma[ , 2]))
 ```
-launch_shinystan(fit_mcsma)
-```
+
+

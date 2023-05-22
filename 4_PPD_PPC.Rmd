@@ -70,11 +70,11 @@ In the Stan code below, we pass in the data (because Stan requires a `data` bloc
 ```{stan, output.var = "bin_unif_prior", cache = TRUE}
 data {
     int<lower = 0> N;
-    int<lower = 0, upper = 1> y[N];
+    array[N] int<lower = 0, upper = 1> y;
 }
 generated quantities {
     real theta;
-    real y_sim[N];
+    array[N] int y_sim;
     
     theta = uniform_rng(0, 1);  // Draw randomly from the prior
     for (n in 1:N) {
@@ -129,7 +129,7 @@ The easiest way to perform a PPC is to include a `generated quantites` block in 
 ```{stan, output.var = "bin_unif", cache = TRUE}
 data {
     int<lower = 0> N;
-    int<lower = 0, upper = 1> y[N];
+    array[N] int<lower = 0, upper = 1> y;
 }
 parameters {
     real<lower = 0, upper = 1> theta;
@@ -139,7 +139,7 @@ model {
     y ~ bernoulli(theta);   // likelihood
 }
 generated quantities {
-    real y_sim[N];
+    array[N] int y_sim;
     
     for(n in 1:N) {
         y_sim[n] = bernoulli_rng(theta);
@@ -207,11 +207,11 @@ The prior predictive distribution should be different in this case. The code bel
 ```{stan, output.var = "bin_norm1_prior", cache = TRUE}
 data {
     int<lower = 0> N;
-    int<lower = 0, upper = 1> y[N];
+    array[N] int<lower = 0, upper = 1> y;
 }
 generated quantities {
     real theta;
-    real y_sim[N];
+    array[N] int y_sim;
     
     theta = normal_rng(0.3, 0.1);  // Draw randomly from the prior
     for(n in 1:N) {
@@ -262,7 +262,7 @@ As before, we modify the Stan model by adding a `generated quantities` block for
 ```{stan, output.var = "bin_norm1", cache = TRUE}
 data {
     int<lower = 0> N;
-    int<lower = 0, upper = 1> y[N];
+    array[N] int<lower = 0, upper = 1> y;
 }
 parameters {
     real<lower = 0, upper = 1> theta;
@@ -272,7 +272,7 @@ model {
     y ~ bernoulli(theta);       // likelihood
 }
 generated quantities {
-    real y_sim[N];
+    array[N] int y_sim;
     
     for(n in 1:N) {
         if(theta < 0 || theta > 1)

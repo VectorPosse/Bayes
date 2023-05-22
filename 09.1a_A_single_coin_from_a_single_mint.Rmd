@@ -57,7 +57,7 @@ The `for` loop at the end uses a function that generates a Bernoulli distributio
 ```{stan, output.var = "scsma_prior", cache = TRUE}
 data {
     int<lower = 0> N;
-    vector<lower = 0>[N] y;
+    array[N] int<lower = 0, upper = 1> y;
 }
 transformed data {
     real<lower = 0> A_omega;
@@ -73,7 +73,7 @@ generated quantities {
     real<lower = 0, upper = 1> theta;
     real<lower = 0> a;
     real<lower = 0> b;
-    int<lower = 0, upper = 1> y_sim[N];
+    array[N] int<lower = 0, upper = 1> y_sim;
     
     omega = beta_rng(A_omega, B_omega); // mode
     a = omega * (K - 2) + 1;
@@ -136,7 +136,7 @@ In the model code below, we list `omega` and `theta` as the parameters of intere
 ```{stan, output.var = "scsma", cache = TRUE}
 data {
     int<lower = 0> N;
-    int<lower = 0, upper = 1> y[N];
+    array[N] int<lower = 0, upper = 1> y;
 }
 transformed data {
     real<lower = 0> A_omega;  
@@ -164,7 +164,7 @@ model {
     y ~ bernoulli(theta);            // likelihood
 }
 generated quantities {
-    int<lower = 0, upper = 1> y_sim[N];
+    array[N] int<lower = 0, upper = 1> y_sim;
     
     for (n in 1:N) {
         y_sim[n] = bernoulli_rng(theta);

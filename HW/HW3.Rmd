@@ -1,25 +1,27 @@
 ---
-title: "Homework 3"
+title: "Homework 3 KEY"
 author: "Put your name here"
 date: "Put the date here"
 output: html_notebook
 ---
 
 <!-- Please don't mess with the next few lines! -->
-<style>h5{font-size:2em;color:#0000FF}h6{font-size:1.5em;color:#0000FF}div.answer{margin-left:5%;border:1px solid #0000FF;border-left-width:10px;padding:25px} div.summary{background-color:rgba(30,144,255,0.1);border:3px double #0000FF;padding:25px}</style>
+<style>h5{font-size:2em;color:#0000FF}h6{font-size:1.5em;color:#0000FF}div.answer{margin-left:5%;border:1px solid #0000FF;border-left-width:10px;padding:25px} div.summary{background-color:rgba(30,144,255,0.1);border:3px double #0000FF;padding:25px}</style>`r options(scipen=999)`
 <!-- Please don't mess with the previous few lines! -->
 
 
 ## Preliminaries
 
-```{r, message = FALSE}
+```{r}
 library(tidyverse)
 library(rstan)
+library(tidybayes)
+library(bayesplot)
 library(MASS)
 library(broom)
-library(bayesplot)
 ```
 
+In many parts of this assignment, you will see code chunks that have the code `eval = FALSE` in the header. This tells RStudio not to evaluate the code in these chunks yet. This is important, as these code chunks depend on other earlier code chunks that you have yet to complete. They will not run until you have correct code in the chunks above them. So, once you do have correct code, change the word `FALSE` to the word `TRUE` (all caps) so that it says `eval = TRUE` instead. Then you will be able to run that code chunk. You should be able to "Run All" or "Restart R and Run All Chunks" and "Preview" any time you need without hitting errors from pre-existing code chunks.
 
 ##### Question 1
 
@@ -33,183 +35,206 @@ Since the process is a little involved, we'll break it down into easy-to-digest 
 
 Write down a contextually meaningful interpretation of the mathematical expression $p(\theta = Y \mid x = 4)$. (This is the posterior that we need to calculate.)
 
-<div class = "answer">
+::: {.answer}
 
 Please write up your answer here.
 
-</div>
+:::
 
 ###### (b).
 
 Write down a contextually meaningful interpretation of the prior $p(\theta = Y)$.
 
-<div class = "answer">
+::: {.answer}
 
 Please write up your answer here.
 
-</div>
+:::
 
 ###### (c).
 
 According to the information given in the problem statement, what is the value of the prior $p(\theta = Y)$? Store this value in a variable called `prior`.
 
-<div class = "answer">
+::: {.answer}
 
-```{r}
-# Uncomment the line below and replace the question mark to
+```{r, eval = FALSE}
+# Replace the question mark to
 # store the value of the prior in a variable called prior.
+# Change eval = FALSE to eval = TRUE in the header.
 
-# prior <- ?
+prior <- ?
 ```
 
-</div>
+:::
 
 ###### (d).
 
 Write down a contextually meaningful interpretation of the likelihood $p(x = 4 \mid \theta = Y)$.
 
-<div class = "answer">
+::: {.answer}
 
 Please write up your answer here.
 
-</div>
+:::
 
 ###### (e).
 
 To calculate the likelihood $p(x = 4 \mid \theta = Y)$, we recall that last year's profits for companies that issue dividends are distributed according to the normal model $N(10, 6)$. The general formula for a normal model is
 
-$$\frac{1}{\sigma \sqrt{ 2 \pi}}e^{-(x - \mu)^{2}/2\sigma^{2}}$$
-Plug in all the known values to obtain a value for the likelihood. The R command for the square root is `sqrt`. The number $\pi$ is stored as `pi`. Powers are computed using the caret `^` except the exponential function, which uses `exp`.  For example, $e^{2\sqrt{1 + \pi^{2}}}$ would be calculated using the R code `exp(2 * sqrt(1 + pi^2))`. Be careful with parentheses and order of operations!
+$$
+\frac{1}{\sigma \sqrt{ 2 \pi}}e^{-(x - \mu)^{2}/2\sigma^{2}}.
+$$
+
+Plug in all the known values to obtain a value for the likelihood. The R command for the square root is `sqrt`. The number $\pi$ is stored as `pi`. Powers are computed using the caret `^` except the exponential function, which uses `exp`.  For example,
+
+$$
+e^{2\sqrt{1 + \pi^{2}}}
+$$
+
+would be calculated using the R code `exp(2 * sqrt(1 + pi^2))`. Be careful with parentheses and order of operations!
 
 Store your answer in a variable called `likelihood`. (Hint: the answer should be 0.04032845)
 
-<div class = "answer">
+::: {.answer}
 
-```{r}
-# Uncomment the lines below and replace the question mark to
-# evaluate the normal model N(10, 6) at x = 4
-# and store the value in a variable called likelihood.
+```{r, eval = FALSE}
+# Replace the question mark to
+# evaluate the normal model N(10, 6) at x = 4.
+# Store the value in a variable called likelihood.
+# Change eval = FALSE to eval = TRUE in the header.
 
-# likelihood <- ?
-# likelihood
+likelihood <- ?
+likelihood
 ```
 
-</div>
+:::
 
 ###### (f).
 
 The denominator of Bayes's Theorem (the "evidence") is
 
-$$\sum_{\theta} p(\theta) p(x \mid \theta).$$
+$$
+\sum_{\theta} p(\theta) p(x \mid \theta).
+$$
 
 In this problem, the sum is only two terms, corresponding to the two possible values of $\theta$ ($Y$ or $N$). So it looks like the following:
 
-$$p(\theta = Y) p(x = 4 \mid \theta = Y) + p(\theta = N) p(x = 4 \mid \theta = N).$$
+$$
+p(\theta = Y) p(x = 4 \mid \theta = Y) + p(\theta = N) p(x = 4 \mid \theta = N).
+$$
 
 You already know the first term of the sum $p(\theta = Y) p(x = 4 \mid \theta = Y)$. (This is just `prior * likelihood`.)
 
 What is the value of $p(\theta = N)$? (You know $p(\theta = Y)$, so don't overthink this!)
 
-<div class = "answer">
+::: {.answer}
 
 Please write up your answer here.
 
-</div>
+:::
 
 ###### (g).
 
 To compute $p(x = 4 \mid \theta = N)$?, we'll do something very similar to what we did to compute the likelihood in Part (e). But now the normal model changes from $N(10, 6)$ to $N(0, 6)$. Why?
 
-<div class = "answer">
+::: {.answer}
 
 Please write up your answer here.
 
-</div>
+:::
 
 ###### (h).
 
 Using the normal model $N(0, 6)$, compute $p(x = 4 \mid \theta = N)$.
 
-<div class = "answer">
+::: {.answer}
 
 ```{r}
 # Evaluate the normal model N(0, 6) at x = 4.
 
-# (We won't store the value this time.)
 ```
 
-</div>
+:::
 
 ###### (i).
 
 Put parts (f), (g), and (h) all together now to compute the denominator for Bayes's Theorem:
 
-$$p(\theta = Y) p(x = 4 \mid \theta = Y) + p(\theta = N) p(x = 4 \mid \theta = N).$$
+$$
+p(\theta = Y) p(x = 4 \mid \theta = Y) + p(\theta = N) p(x = 4 \mid \theta = N).
+$$
 
 Store your answer in a variable called `evidence`.
 
-<div class = "answer">
+::: {.answer}
 
-```{r}
-# Uncomment the lines below and replace the question mark to
+```{r, eval = FALSE}
+# Replace the question mark to
 # evaluate the denominator for Bayes's Theorem (the evidence)
 # and store the value in a variable called evidence.
+# Change eval = FALSE to eval = TRUE in the header.
 
-# evidence <- ?
-# evidence
+evidence <- ?
+evidence
 ```
 
-</div>
+:::
 
 ###### (j).
 
 If everything worked correctly, the following code should compute the correct posterior probability:
 
-```{r}
-# Uncomment the lines below to calculate and report the posterior.
+```{r, eval = FALSE}
+# Change eval = FALSE to eval = TRUE in the header
+# to calculate and report the posterior.
 
-# posterior <- prior * likelihood / evidence
-# posterior
+posterior <- prior * likelihood / evidence
+posterior
 ```
 
 The answer should be 0.7518525. (If you didn't get that, go back and check your work *carefully*!) State this result as a conclusion in the context of the original problem.
 
-<div class = "answer">
+::: {.answer}
 
 Please write up your answer here.
 
-</div>
+:::
 
 
 ##### Question 2
 
-From the `cats` data, consider a relationship in which the between the heart weight of cats (in grams) is predicted from their body weight (in kilograms).
+From the `cats` data (in the `MASS` package), consider a relationship in which the heart weight of cats (in grams) is predicted from their body weight (in kilograms).
 
-Before we do inference, let's prepare the data by mean-centering the explanatory variable. This will ensure that the intercept is interpretable. (The value of the intercept will be the predicted heart weight when the body weight is average.)
+Before we do inference, let's prepare the data by mean-centering the explanatory variable. This will ensure that the intercept is interpretable. (The value of the intercept will be the predicted heart weight when the body weight for a cat of average body weight.)
 
 ```{r}
-cats2 <- cats %>%
+cats <- cats %>%
     mutate(Bwt_mc = Bwt - mean(Bwt))
-str(cats2)
+str(cats)
+```
+
+```{r}
+ggplot(cats, aes(y = Hwt, Bwt_mc)) +
+    geom_point()
 ```
 
 We store the data in a list:
 
 ```{r}
-N <- NROW(cats2)
-y <- cats2$Hwt
-x <- cats2$Bwt_mc
-cat_data <- list(N = N, y = y, x = x)
-str(cat_data)
+N <- NROW(cats)
+y <- cats$Hwt
+x <- cats$Bwt_mc
+stan_data <- list(N = N, y = y, x = x)
+glimpse(stan_data)
 ```
 
 The following Stan code builds a simple linear regression model on the data:
 
-```{stan, output.var = "cat_stan", cache = TRUE}
+```{stan, output.var = "cats_reg", cache = TRUE}
 data {
   int<lower = 0> N; // sample size
-  vector[N] x;      // explanatory variable
   vector[N] y;      // response variable
+  vector[N] x;      // predictor variable
 }
 parameters {
   real beta0;               // intercept
@@ -220,131 +245,451 @@ model {
   y ~ normal(beta0 + beta1 * x, sigma);
 }
 generated quantities {
-  real y_rep[N];
+  real y_sim[N];
   
   for (n in 1:N) {
-    y_rep[n] = normal_rng(beta0 + beta1 * x[n], sigma);
+    y_sim[n] = normal_rng(beta0 + beta1 * x[n], sigma);
   }
 }
 ```
 
 ```{r}
-fit_cat_stan <- sampling(cat_stan, data = cat_data, refresh = 0)
+fit_cats_reg <- sampling(cats_reg,
+                        data = stan_data,
+                        seed = 12345,
+                        refresh = 0)
+```
+
+Here are the summary statistics for the sampled values of the intercept `beta0`, slope `beta1`, and residual error `sigma` of `fit_cats_reg`.
+
+```{r}
+print(fit_cats_reg,
+      pars = c("beta0", "beta1", "sigma"))
 ```
 
 ###### (a).
 
-Print the summary statistics for the sampled values of the intercept `beta0`, slope `beta1`, and residual error `sigma` of `fit_cat_stan`.
+Use the `mcmc_dens` function to plot the simulated posterior distributions of the regression parameters (`beta0`, `beta1`, `sigma`).
 
-<div class = "answer">
+::: {.answer}
 
 ```{r}
-# Add code here to print summary statistics for the
-# intercept and slope.
+# Add code here to plot beta0
 ```
 
-</div>
+```{r}
+# Add code here to plot beta1
+```
+
+```{r}
+# Add code here to plot sigma
+```
+
+:::
 
 ###### (b).
 
-Use the `stan_dens` function to plot the simulated posterior distributions of the regression parameters (`beta0`, `beta1`, `sigma`).
+In a few sentences, interpret the output as it relates to the linear regression model you're trying to find. In other words, discuss the values of the three parameters above and what that means in the context of this model for cats.
 
-<div class = "answer">
+::: {.answer}
 
-```{r}
-# Add code here to plot the simulated posterior distributions
-# of the regression parameters.
-```
+Please write up your answer here.
 
-</div>
+:::
 
 ###### (c).
 
-In a few sentences, interpret the output as it relates to the linear regression model you're trying to find.
+We will run a standard linear regression using `lm`. Change `eval = FALSE` to `eval = TRUE` in the two chunks below.
 
-<div class = "answer">
+```{r, eval = FALSE}
+# Change eval = FALSE to eval = TRUE in the header.
+
+Hwt_Bwt <- lm(Hwt ~ Bwt_mc, data = cats)
+tidy(Hwt_Bwt)
+```
+
+```{r, eval = FALSE}
+# Change eval = FALSE to eval = TRUE in the header.
+
+glance(Hwt_Bwt)
+```
+
+Are these results consistent with the Bayesian results above? (Be sure to address all three parameters, $\beta_{0}$, $\beta_{1}$, and $\sigma$.)
+
+::: {.answer}
 
 Please write up your answer here.
 
-</div>
+:::
+
 
 ###### (d).
 
-Run a standard linear regression using `lm`. Is the result consistent with the Bayesian results above? (Be sure to address all three parameters, $\beta_{0}$, $\beta_{1}$, and $\sigma$.)
+Since there are no priors specified, the default in Stan is to use uniform priors. (These would be uniform on $(-\infty, \infty)$ for $\beta_{0}$ and $\beta_{1}$, and $[0, \infty)$ for $\sigma$ because of the hard-coded constraint.) Explain why these priors are not ideal. Hint: the prior is meant to put probability on ranges of plausible values.
 
-<div class = "answer">
-
-```{r}
-# Add code here to run a standard linear regression using lm.
-```
+::: {.answer}
 
 Please write up your answer here.
 
-</div>
+:::
+
+(The reason we didn't create a prior predictive distribution is that, with uniform priors, all real values are equally possible for `beta0` and `beta1`, and all positive values are possible for `sigma`. These don't even have a "proper" probability distribution! What would the value of a constant function be if the domain is infinitely long, but the total area under the curve is supposed to be 1?!? We sort of got lucky that Stan even let us do this, but since there was data, there was a well-defined posterior distribution. Without the data, Stan will choke on these improper priors.)
 
 ###### (e).
 
-Since there are no priors specified, the default in Stan is to use uniform priors. (These would be uniform on $(-\infty, \infty)$ for $\beta_{0}$ and $\beta_{1}$, and $[0, \infty)$ for $\sigma$ because of the hard-coded constraint.) Explain why these priors are not ideal.
+Here you will choose better priors. When choosing *informative priors*, it's considered cheating to look at the data---informative priors are supposed to come from substantive knowledge you already have before you collect data. (And you may or may not know anything about typical body weights and heart weights for cats.) Choosing *weakly informative priors* is a matter of finding a range of plausible values and finding a distribution that puts substantial probability in ranges even somewhat beyond that. Such weakly informative priors will still be better than uniform priors.
 
-<div class = "answer">
+We will use normal priors instead. Describe in words what mean and standard deviation would make more sense for normal distributions for `beta0` and `beta1`.
+
+::: {.answer}
 
 Please write up your answer here.
 
-</div>
+:::
 
 ###### (f).
 
-Here you will choose better priors. When choosing *informative priors*, it's considered cheating to look at the data---informative priors are supposed to come from substantive knowledge you already have before you collect data. (And you may or may not know anything about typical body weights and heart weights for cats.) Choosing *weakly informative priors* is a matter of finding a range of plausible values and finding a distribution that puts substantial probability in ranges even way beyond that. Such weakly informative priors will still be better than uniform priors.
+Here is the code to generate the prior predictive distribution. Replace the question marks with the values you chose and justified above. Then change `eval = FALSE` to `eval = TRUE` in the header.
 
-Run a new Stan model by copying and pasting the Stan code chunk above and making changes to it. Change the `output.var` in the header to `cat_stan2`. Add some sensible prior distributions for the intercept and slope parameters. Use a `cauchy(0, 5)` prior for `sigma`. (Don't worry too much about why---the Cauchy distribution is commonly recommended as a weakly informative prior for standard deviations.) Remember that your `x` variable has been mean-centered, so that may affect your choice of prior.
+Note: we're using an `exponential(1.0/10)` prior for `sigma`. The exponential distribution is commonly recommended as a weakly informative prior for standard deviations. The "rate" `1.0/10` corresponds to an average residual standard deviation of 10. That's a pretty wide prior since we don't expect, for a given body weight, that a heart will vary as much as 20 grams above or below the mean. Even then, the exponential prior will allow for a wide range of possible standard deviations above and below 10 as well. (This does require some domain-specific knowledge about the size of cat hearts.)
 
-Also sample from the model in this step in a separate code chunk using the `sampling` function.
+```{stan, eval = FALSE, output.var = "cats_reg2_prior", cache = TRUE}
+// Change eval = FALSE to eval = TRUE in the header.
+data {
+  int<lower = 0> N; // sample size
+  vector[N] y;      // response variable
+  vector[N] x;      // predictor variable
+}
+generated quantities {
+  real beta0;               // intercept
+  real beta1;               // slope
+  real<lower = 0> sigma;    // residual errors
+  real y_sim[N];
+  
+  beta0 = normal_rng(?, ?);
+  beta1 = normal_rng(?, ?);
+  sigma = exponential_rng(1.0/10);
+  y_sim = normal_rng(beta0 + beta1 * x, sigma);
+}
+```
 
-<div class = "answer">
+Now we sample from the prior.
 
-Copy/paste/modify `stan` chunk here.
+```{r, eval = FALSE, cache = TRUE}
+# Change eval = FALSE to eval = TRUE in the header.
 
-Also sample from the model.
+fit_cats_reg2_prior <- sampling(cats_reg2_prior,
+                                data = stan_data,
+                                chains = 1,
+                                algorithm = "Fixed_param",
+                                seed = 12345,
+                                refresh = 0
+)
+```
 
-</div>
+```{r, eval = FALSE}
+# Change eval = FALSE to eval = TRUE in the header.
+
+samples_cats_reg2_prior <- tidy_draws(fit_cats_reg2_prior)
+samples_cats_reg2_prior
+```
+
+Here are some graphs of the prior distributions.
+
+```{r, eval = FALSE}
+# Change eval = FALSE to eval = TRUE in the header.
+
+mcmc_hist(samples_cats_reg2_prior, pars = "sigma")
+```
+
+```{r, eval = FALSE}
+# Change eval = FALSE to eval = TRUE in the header.
+
+mcmc_hist(samples_cats_reg2_prior, pars = "beta0")
+```
+
+```{r, eval = FALSE}
+# Change eval = FALSE to eval = TRUE in the header.
+
+mcmc_hist(samples_cats_reg2_prior, pars = "beta1")
+```
+
+```{r, eval = FALSE}
+# Change eval = FALSE to eval = TRUE in the header.
+
+mcmc_pairs(fit_cats_reg2_prior,
+           pars = c("sigma", "beta0", "beta1"))
+```
+
+You can mess with the `xlim` and `ylim` parameters in the code below if you need to be able to see more of the prior lines that were simulated:
+
+```{r, eval = FALSE}
+# Change eval = FALSE to eval = TRUE in the header.
+
+ggplot(cats, aes(y = Hwt, x = Bwt_mc)) +
+    geom_point() +
+    geom_abline(data = samples_cats_reg2_prior,
+                aes(intercept = beta0, slope = beta1),
+                alpha = 0.02) +
+    xlim(-2, 2) +
+    ylim(-10, 50)
+```
+
+What do you think of your priors? Are they sufficiently broad without giving too much weight to obscenely impossible values?
+
+::: {.answer}
+
+Please write up your answer here.
+
+:::
 
 ###### (g).
 
-Follow the same steps as above to print the posterior summary and visualize it.
+Here is one way of visualizing the prior predictive distribution.
 
-<div class = "answer">
+```{r, eval = FALSE}
+# Change eval = FALSE to eval = TRUE in the header.
 
-Please write up answer here.
+y_sim_cats_reg2_prior <- samples_cats_reg2_prior %>%
+    dplyr::select(starts_with("y_sim")) %>%
+    as.matrix()
+```
 
-</div>
+```{r, eval = FALSE}
+# Change eval = FALSE to eval = TRUE in the header.
 
-###### (h).
+ppd_intervals(ypred = y_sim_cats_reg2_prior,
+              x = cats$Bwt_mc)
+```
 
-How do your results from part (g) compare to the results from uniform priors? Why do you expect that?
+What do you learn from the graph above about hypothetical data that would be generated from your choice of prior?
 
-<div class = "answer">
+::: {.answer}
 
-Please write up answer here.
+Please write up your answer here.
 
-</div>
+:::
+
+##### (h).
+
+Run a new Stan model by copying and pasting the Stan code chunk for `cats_reg` above and making changes to it. (Be sure to get the first Stan chunk for `cats_reg` and not the one for `cats_reg2_prior`!) Change the `output.var` in the header to `cats_reg2`.
+
+Also sample from the model in this step in a separate code chunk (using the `sampling` function as before) by setting `eval = TRUE` in the code chunk below the Stan code.
+
+::: {.answer}
+
+```{stan, eval = FALSE, output.var = "cats_reg2", cache = TRUE}
+// Add code here to build a linear regression model
+// in Stan with better priors.
+// Change eval = FALSE to eval = TRUE in the header.
+```
+
+```{r, eval = FALSE}
+# Change eval = FALSE to eval = TRUE in the header.
+
+fit_cats_reg2 <- sampling(cats_reg2,
+                          data = stan_data,
+                          seed = 12345,
+                          refresh = 0)
+```
+
+:::
 
 ###### (i).
 
-Here is a visualization of the posterior predictive distribution:
+Below are some visualizations for model diagnostics. Beneath each, comment briefly on what you learn about the success of the sampling procedure.
 
-```{r}
-cat_samples <- extract(fit_cat_stan)
-y_rep <- cat_samples$y_rep
-ppc_scatter_avg(y, y_rep) +
-  xlim(5, 21) +
-  ylim(5, 21) +
-  coord_fixed()
+```{r, eval = FALSE}
+# Change eval = FALSE to eval = TRUE in the header.
+
+stan_trace(fit_cats_reg2,
+           pars = c("sigma", "beta0", "beta1"))
 ```
 
-How do you interpret this picture? What does this tell you about data simulated from the posterior distribution compared to the original data?
+::: {.answer}
 
-<div class = "answer">
+Please write up your answer here.
 
-Please write up answer here.
+:::
 
-</div>
+```{r, eval = FALSE}
+# Change eval = FALSE to eval = TRUE in the header.
+
+mcmc_acf(fit_cats_reg2,
+         pars = c("sigma", "beta0", "beta1"))
+```
+
+::: {.answer}
+
+Please write up your answer here.
+
+:::
+
+
+```{r, eval = FALSE}
+# Change eval = FALSE to eval = TRUE in the header.
+
+mcmc_rhat(rhat(fit_cats_reg2))
+```
+
+::: {.answer}
+
+Please write up your answer here.
+
+:::
+
+```{r, eval = FALSE}
+# Change eval = FALSE to eval = TRUE in the header.
+
+mcmc_neff(neff_ratio(fit_cats_reg2))
+```
+
+::: {.answer}
+
+Please write up your answer here.
+
+:::
+
+
+###### (j).
+
+Follow the same steps as above to print the posterior summary and visualize it. (Use the `print` method and three `mcmc_dens` functions.)
+
+::: {.answer}
+
+```{r}
+# Add code here to print the posterior summary
+```
+
+```{r}
+# Add code here to graph beta0
+```
+
+```{r}
+# Add code here to graph beta1
+```
+
+```{r}
+# Add code here to graph sigma
+```
+
+:::
+
+###### (k).
+
+How do your results from part (i) compare to the results from uniform priors? Why do you expect that?
+
+::: {.answer}
+
+Please write up your answer here.
+
+:::
+
+###### (l).
+
+Below are a whole bunch of visualizations of the posterior predictive distribution that allow us to perform a posterior predictive check. Beneath each, comment briefly on what you learn about the posterior relative to the original data. (Some of the answers will be very similar to other answers you give because several of the plots are showing the same thing multiple ways.)
+
+```{r, eval = FALSE}
+# Change eval = FALSE to eval = TRUE in the header.
+
+samples_cats_reg2 <- tidy_draws(fit_cats_reg2)
+y_sim_cats_reg2 <- samples_cats_reg2 %>%
+    dplyr::select(starts_with("y_sim")) %>%
+    as.matrix()
+```
+
+```{r, eval = FALSE}
+# Change eval = FALSE to eval = TRUE in the header.
+
+ppc_hist(y = y,
+         yrep = y_sim_cats_reg2[1:19, ])
+```
+
+::: {.answer}
+
+Please write up your answer here.
+
+:::
+
+```{r, eval = FALSE}
+# Change eval = FALSE to eval = TRUE in the header.
+
+ppc_boxplot(y = y,
+            yrep = y_sim_cats_reg2[1:10, ],
+            notch = FALSE)
+```
+
+::: {.answer}
+
+Please write up your answer here.
+
+:::
+
+```{r, eval = FALSE}
+# Change eval = FALSE to eval = TRUE in the header.
+
+ppc_dens_overlay(y = y,
+                 yrep = y_sim_cats_reg2[1:50, ])
+```
+
+::: {.answer}
+
+Please write up your answer here.
+
+:::
+
+```{r, eval = FALSE}
+# Change eval = FALSE to eval = TRUE in the header.
+
+ppc_scatter(y = y,
+            yrep = y_sim_cats_reg2[1:9, ])
+```
+
+::: {.answer}
+
+Please write up your answer here.
+
+:::
+
+```{r, eval = FALSE}
+# Change eval = FALSE to eval = TRUE in the header.
+
+ppc_scatter_avg(y = y,
+                yrep = y_sim_cats_reg2)
+```
+
+::: {.answer}
+
+Please write up your answer here.
+
+:::
+
+
+```{r, eval = FALSE}
+# Change eval = FALSE to eval = TRUE in the header.
+
+ppc_intervals(y = y,
+              x = x,
+              yrep = y_sim_cats_reg2,
+              prob = 0.68,
+              prob_outer = 0.95)
+```
+
+::: {.answer}
+
+Please write up your answer here.
+
+:::
+
+```{r, eval = FALSE}
+# Change eval = FALSE to eval = TRUE in the header.
+
+ppc_stat_2d(y = y,
+            yrep = y_sim_cats_reg2)
+```
+
+::: {.answer}
+
+Please write up your answer here.
+
+:::
