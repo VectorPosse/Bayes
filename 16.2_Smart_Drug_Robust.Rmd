@@ -13,10 +13,10 @@ This is the example from Section 16.2 of Kruschke on the (fictitious) effect of 
 
 Load necessary packages:
 
-```{r, message = FALSE}
+```{r}
 library(tidyverse)
 library(rstan)
-library(shinystan)
+library(tidybayes)
 library(bayesplot)
 ```
 
@@ -48,6 +48,10 @@ IQ1_data <- IQ_data %>%
 IQ1_data
 ```
 
+```{r}
+ggplot(IQ1_data, aes(x = Score)) +
+    geom_histogram(binwidth = 10, boundary = 50)
+```
 
 ```{r}
 N <- NROW(IQ1_data)
@@ -56,228 +60,261 @@ stan_data <- list(N = N, y = y)
 ```
 
 
-## Stan code
+## Prior
 
-We have added `mu` and `mu_minus_one` with an exponential prior on `mu_minus_one`. The strange `Rate` of 1/29 is explained in the section of the textbook. The reason it's written as `1.0/29.0` here is to force Stan to use real number division and get a decimal. Otherwise, it will try "integer division" and round down to zero.
+### Simulation code
 
-```{stan, output.var = "IQ_robust", cache = TRUE}
-data {
-    int<lower = 0> N;
-    real<lower = 0> y[N];
-}
-transformed data {
-    real<lower = 0> Rate;
-    real<lower = 0> M;
-    real<lower = 0> S;
-    real<lower = 0> L;
-    real<lower = 0> H;
-    
-    Rate = 1.0/29.0;
-    M = 100;
-    S = 100;
-    L = 0;
-    H = 1000;
-}
-parameters {
-    real<lower = 0> nu_minus_one;
-    real<lower = 0> mu;
-    real<lower = 0> sigma;
-}
-transformed parameters {
-    real<lower = 0> nu;
-
-    nu = nu_minus_one + 1;
-}
-model {
-    nu_minus_one ~ exponential(Rate);
-    mu ~ normal(M, S);
-    sigma ~ uniform(L, H);
-    y ~ student_t(nu, mu, sigma);
-}
-generated quantities {
-    real y_rep[N];
-    
-    for (n in 1:N) {
-        y_rep[n] = student_t_rng(nu, mu, sigma);
-    }
-}
-```
-
-
-## Sampling from the model
-
-```{r}
-set.seed(11111)
-fit_IQ_robust <- sampling(IQ_robust, data = stan_data, refresh = 0)
-```
-
-
-## Diagnosing the model
-
-```{r}
-plot(fit_IQ_robust, plotfun = "ac", pars = c("nu", "mu", "sigma"))
-```
-
-```{r}
-plot(fit_IQ_robust, plotfun = "trace",
-     pars = c("nu", "mu", "sigma"))
-```
-
-
-## Summarizing the model
-
-```{r}
-print(fit_IQ_robust, pars = c("nu", "mu", "sigma"))
-```
-
-
-## Visualizing the model
-
-```{r}
-pairs(fit_IQ_robust, pars = c("nu", "mu", "sigma"))
-```
-
-```{r}
-plot(fit_IQ_robust, plotfun = "dens", pars = c("nu", "mu", "sigma"))
-```
-
-```{r}
-plot(fit_IQ_robust, pars = c("nu", "mu", "sigma"))
-```
-
-
-## Examining the prior
+The book uses `nu_minus_one` with an exponential prior. Then we will add one to to `nu_minus_one` to constrain `nu` to take values larger than 1. For the rate `R_nu_minus_one`, we'll use `1.0/29` as this implies an "average" of 30 degrees of freedom (which is when the Student t model starts looking indistinguishable from a normal model).
 
 ```{stan, output.var = "IQ_robust_prior", cache = TRUE}
 data {
     int<lower = 0> N;
-    real<lower = 0> y[N];
+    array[N] real y;
 }
 transformed data {
-    real<lower = 0> Rate;
-    real<lower = 0> M;
+    real M;
     real<lower = 0> S;
-    real<lower = 0> L;
-    real<lower = 0> H;
+    real<lower = 0> R_nu_minus_one;
+    real<lower = 0> R_sigma;
     
-    Rate = 1.0/29.0;
-    M = 100;
-    S = 100;
-    L = 0;
-    H = 1000;
+    M = 100;   // mean centered at 100
+    S = 50;    // mean between 0 and 200
+    R_nu_minus_one = 1.0/29;  // df of 30
+    R_sigma = 1.0/50;         // sd of 50
+}
+generated quantities {
+    real<lower = 0> nu_minus_one;
+    real<lower = 1> nu;
+    real mu;
+    real<lower = 0> sigma;
+    array[N] real y_sim;
+    
+    nu_minus_one = exponential_rng(R_nu_minus_one);
+    nu = nu_minus_one + 1;
+    mu = normal_rng(M, S);
+    sigma = exponential_rng(R_sigma);
+    
+    for(n in 1:N) {
+        y_sim[n] = student_t_rng(nu, mu, sigma);
+    }
+}
+```
+
+```{r, cache = TRUE}
+fit_IQ_robust_prior <- sampling(IQ_robust_prior,
+                                data = stan_data,
+                                chains = 1,
+                                algorithm = "Fixed_param",
+                                seed = 11111,
+                                refresh = 0)
+```
+
+```{r}
+samples_IQ_robust_prior <- tidy_draws(fit_IQ_robust_prior)
+samples_IQ_robust_prior
+```
+
+### Examine prior
+
+```{r}
+mcmc_hist(samples_IQ_robust_prior,
+          pars = "nu")
+```
+
+```{r}
+mcmc_hist(samples_IQ_robust_prior,
+          pars = "mu")
+```
+
+```{r}
+mcmc_hist(samples_IQ_robust_prior,
+          pars = "sigma")
+```
+
+
+```{r}
+mcmc_pairs(fit_IQ_robust_prior,
+           pars = c("nu", "mu", "sigma"))
+```
+
+### Prior predictive distribution
+
+```{r}
+y_sim_IQ_robust_prior <- samples_IQ_robust_prior %>%
+    dplyr::select(starts_with("y_sim")) %>%
+    as.matrix()
+```
+
+```{r}
+ppd_hist(ypred = y_sim_IQ_robust_prior[1:20,])
+```
+
+```{r}
+ppd_boxplot(ypred = y_sim_IQ_robust_prior[1:10, ],
+            notch = FALSE)
+```
+
+As before, these priors are likely too wide, especially now that the Student t model is capable of generating outliers.
+
+```{r}
+ppd_intervals(ypred = y_sim_IQ_robust_prior)
+```
+
+
+## Model
+
+In the model code below, we list `mu` and `sigma` as the parameters of interest. The `a` and `b` parameters are defined in the `transformed parameters` block. They make the model easier to read, but they are not the main objects of our inference.
+
+```{stan, output.var = "IQ_robust", cache = TRUE}
+data {
+    int<lower = 0> N;
+    array[N] real y;
+}
+transformed data {
+    real M;
+    real<lower = 0> S;
+    real<lower = 0> R_nu_minus_one;
+    real<lower = 0> R_sigma;
+    
+    M = 100;   // mean centered at 100
+    S = 50;    // mean between 0 and 200
+    R_nu_minus_one = 1.0/29;  // df of 30
+    R_sigma = 1.0/50;         // sd of 50
 }
 parameters {
     real<lower = 0> nu_minus_one;
-    real<lower = 0> mu;
+    real mu;
     real<lower = 0> sigma;
 }
 transformed parameters {
-    real<lower = 0> nu;
-
+    real<lower = 1> nu;
+    
     nu = nu_minus_one + 1;
 }
 model {
-    nu_minus_one ~ exponential(Rate);
+    nu_minus_one ~ exponential(R_nu_minus_one);
     mu ~ normal(M, S);
-    sigma ~ uniform(L, H);
-//    y ~ student_t(nu, mu, sigma);
+    sigma ~ exponential(R_sigma);
+    y ~ student_t(nu, mu, sigma);
+}
+generated quantities {
+    array[N] real y_sim;
+    
+    for (n in 1:N) {
+        y_sim[n] = student_t_rng(nu, mu, sigma);
+    }
 }
 ```
 
-```{r}
-set.seed(11111)
-fit_IQ_robust_prior <- sampling(IQ_robust_prior, data = stan_data, refresh = 0)
+```{r, cache = TRUE}
+fit_IQ_robust <- sampling(IQ_robust,
+                   data = stan_data,
+                   seed = 11111,
+                   refresh = 0)
 ```
 
 ```{r}
-fit_IQ_robust_prior
+samples_IQ_robust <- tidy_draws(fit_IQ_robust)
+samples_IQ_robust
+```
+
+## Model diagnostics
+
+```{r}
+stan_trace(fit_IQ_robust,
+           pars = c("nu", "mu", "sigma"))
 ```
 
 ```{r}
-pairs(fit_IQ_robust_prior, pars = c("nu", "mu", "sigma"))
+mcmc_acf(fit_IQ_robust,
+         pars = c("nu", "mu", "sigma"))
 ```
 
 ```{r}
-plot(fit_IQ_robust_prior, pars = c("nu", "mu", "sigma"))
+mcmc_rhat(rhat(fit_IQ_robust))
+```
+
+```{r}
+mcmc_neff(neff_ratio(fit_IQ_robust))
+```
+
+
+## Model summary
+
+```{r}
+print(fit_IQ_robust,
+      pars = c("nu", "mu", "sigma"))
+```
+
+
+## Model visualization
+
+```{r}
+mcmc_areas(fit_IQ_robust, pars = "nu")
+```
+
+```{r}
+mcmc_areas(fit_IQ_robust, pars = "mu")
+```
+
+```{r}
+mcmc_areas(fit_IQ_robust, pars = "sigma")
+```
+
+```{r}
+pairs(fit_IQ_robust,
+      pars = c("nu", "mu", "sigma"))
 ```
 
 
 ## Posterior predictive check
 
-Extract predicted values:
-
 ```{r}
-samples_IQ_robust <- extract(fit_IQ_robust)
-y_rep <- samples_IQ_robust$y_rep
-```
-
-Graph values of $y$ against summaries of $y_{rep}$. There are lots of options for numerical data.
-
-For the ones that generate lots of subgraphs, we'll only compare the data to the first 5 replications.
-
-```{r}
-ppc_hist(y, y_rep[1:5, ])
+y_sim_IQ_robust <- samples_IQ_robust %>%
+    dplyr::select(starts_with("y_sim")) %>%
+    as.matrix()
 ```
 
 ```{r}
-ppc_boxplot(y, y_rep[1:5, ])
+ppc_hist(y = y,
+         yrep = y_sim_IQ_robust[1:19, ])
 ```
 
 ```{r}
-ppc_dens(y, y_rep[1:5, ])
-```
-
-In an overlay, we can include a few more. (In theory, we could include all replications, but the function takes a long time to process.)
-
-```{r}
-ppc_dens_overlay(y, y_rep[1:30, ])
-```
-
-For test statistics, we can include all replications.
-
-```{r}
-ppc_stat_2d(y, y_rep)
-```
-
-Whoa! There's one super-freaky sample. Some sleuthing shows that the crazy mean/sd is coming from from the 1514th set of sampled values of `y_rep`:
-
-```{r}
-y_rep[1514, ]
-```
-
-It's the crazy outlier in the 15th spot in this list.
-
-```{r}
-mean(y_rep[1514, ])
+ppc_boxplot(y = y,
+            yrep = y_sim_IQ_robust[1:10, ],
+            notch = FALSE)
 ```
 
 ```{r}
-sd(y_rep[1514, ])
+ppc_dens_overlay(y = y,
+                 yrep = y_sim_IQ_robust[1:50, ])
 ```
-
-There's nothing too weird about the combination of `(nu, mu, sigma)` from which this data was simulated:
 
 ```{r}
-samples_IQ_robust$nu[1514]
-samples_IQ_robust$mu[1514]
-samples_IQ_robust$sigma[1514]
+ppc_scatter(y = y,
+            yrep = y_sim_IQ_robust[1:9, ])
 ```
-
-The value of `nu` is on the smaller side (but by no means the smallest), so this is a wide t distribution, and the idea is that it's possible, just by chance, to get unusual outliers in t distributions with low values of $\nu$ from time to time.
-
-This one weird value does not prevent the vast majority of our posterior predictive simulations from looking like a much better fit to our data.
-
-The following intervals, of course, don't show the effect of the wacky simulated outlier:
 
 ```{r}
-ppc_intervals(y, y_rep)
+ppc_scatter_avg(y = y,
+                yrep = y_sim_IQ_robust)
 ```
 
-
-## ShinyStan
-
-Run the following code from the Console:
-
+```{r}
+ppc_intervals(y = y,
+              yrep = y_sim_IQ_robust[1:19, ])
 ```
-launch_shinystan(fit_IQ_robust)
+
+```{r}
+ppc_stat(y = y,
+         yrep = y_sim_IQ_robust)
 ```
+
+```{r}
+ppc_stat_2d(y = y,
+            yrep = y_sim_IQ_robust)
+```
+
+There are a few simulated data sets that are outliers, including one huge one. It doesn't invalidate our inference; our estimates of the parameters of interest are stable and reasonable. If there were more outliers like this, though, we would want to reconsider our model to make it less possible to get extreme outliers like this.
+

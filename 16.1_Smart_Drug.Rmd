@@ -13,10 +13,10 @@ This is the example from Section 16.1 of Kruschke on the (fictitious) effect of 
 
 Load necessary packages:
 
-```{r, message = FALSE}
+```{r}
 library(tidyverse)
 library(rstan)
-library(shinystan)
+library(tidybayes)
 library(bayesplot)
 ```
 
@@ -48,6 +48,10 @@ IQ1_data <- IQ_data %>%
 IQ1_data
 ```
 
+```{r}
+ggplot(IQ1_data, aes(x = Score)) +
+    geom_histogram(binwidth = 10, boundary = 50)
+```
 
 ```{r}
 N <- NROW(IQ1_data)
@@ -56,180 +60,233 @@ stan_data <- list(N = N, y = y)
 ```
 
 
-## Stan code
+## Prior
 
-```{stan, output.var = "IQ", cache = TRUE}
-data {
-    int<lower = 0> N;
-    real<lower = 0> y[N];
-}
-transformed data {
-    real<lower = 0> M;
-    real<lower = 0> S;
-    real<lower = 0> L;
-    real<lower = 0> H;
-    
-    M = 100;
-    S = 100;
-    L = 0;
-    H = 1000;
-}
-parameters {
-    real<lower = 0> mu;
-    real<lower = 0> sigma;
-}
-model {
-    mu ~ normal(M, S);
-    sigma ~ uniform(L, H);
-    y ~ normal(mu, sigma);
-}
-generated quantities {
-    real y_rep[N];
-    
-    for (n in 1:N) {
-        y_rep[n] = normal_rng(mu, sigma);
-    }
-}
-```
-
-
-## Sampling from the model
-
-```{r}
-set.seed(11111)
-fit_IQ <- sampling(IQ, data = stan_data, refresh = 0)
-```
-
-
-## Diagnosing the model
-
-```{r}
-plot(fit_IQ, plotfun = "ac", pars = c("mu", "sigma"))
-```
-
-```{r}
-plot(fit_IQ, plotfun = "trace",
-     pars = c("mu", "sigma"))
-```
-
-
-## Summarizing the model
-
-```{r}
-print(fit_IQ, pars = c("mu", "sigma"))
-```
-
-
-## Visualizing the model
-
-```{r}
-pairs(fit_IQ, pars = c("mu", "sigma"))
-```
-
-```{r}
-plot(fit_IQ, plotfun = "dens", pars = c("mu", "sigma"))
-```
-
-```{r}
-plot(fit_IQ, pars = c("mu", "sigma"))
-```
-
-
-## Examining the prior
+### Simulation code
 
 ```{stan, output.var = "IQ_prior", cache = TRUE}
 data {
     int<lower = 0> N;
-    real<lower = 0> y[N];
+    array[N] real y;
 }
 transformed data {
-    real<lower = 0> M;
+    real M;
     real<lower = 0> S;
-    real<lower = 0> L;
-    real<lower = 0> H;
+    real<lower = 0> Rate;
     
-    M = 100;
-    S = 100;
-    L = 0;
-    H = 1000;
+    M = 100;   // mean centered at 100
+    S = 50;    // mean between 0 and 200
+    Rate = 1.0/50; // sd of 50
+
+}
+generated quantities {
+    real mu;
+    real<lower = 0> sigma;
+    array[N] real y_sim;
+    
+    mu = normal_rng(M, S);
+    sigma = exponential_rng(Rate);
+    
+    for(n in 1:N) {
+        y_sim[n] = normal_rng(mu, sigma);
+    }
+}
+```
+
+```{r, cache = TRUE}
+fit_IQ_prior <- sampling(IQ_prior,
+                         data = stan_data,
+                         chains = 1,
+                         algorithm = "Fixed_param",
+                         seed = 11111,
+                         refresh = 0)
+```
+
+```{r}
+samples_IQ_prior <- tidy_draws(fit_IQ_prior)
+samples_IQ_prior
+```
+
+### Examine prior
+
+```{r}
+mcmc_hist(samples_IQ_prior,
+          pars = c("mu", "sigma"))
+```
+
+```{r}
+mcmc_pairs(fit_IQ_prior,
+           pars = c("mu", "sigma"))
+```
+
+### Prior predictive distribution
+
+```{r}
+y_sim_IQ_prior <- samples_IQ_prior %>%
+    dplyr::select(starts_with("y_sim")) %>%
+    as.matrix()
+```
+
+```{r}
+ppd_hist(ypred = y_sim_IQ_prior[1:20,])
+```
+
+
+
+```{r}
+ppd_boxplot(ypred = y_sim_IQ_prior[1:10, ],
+            notch = FALSE)
+```
+
+Many of these simulated data sets have negative IQs and IQs in the range 400--800, so our priors are likely too wide. With enough data, it shouldn't matter, but if we have issues with our model sampling or giving us a reasonable posterior, we might come back here and try different priors.
+
+The intervals below show 50% and 90% credible intervals for the simulated values for each participant in the study. They are appropriately centered at 100 and are plenty wide.
+
+```{r}
+ppd_intervals(ypred = y_sim_IQ_prior)
+```
+
+
+## Model
+
+In the model code below, we list `mu` and `sigma` as the parameters of interest. The `a` and `b` parameters are defined in the `transformed parameters` block. They make the model easier to read, but they are not the main objects of our inference.
+
+```{stan, output.var = "IQ", cache = TRUE}
+data {
+    int<lower = 0> N;
+    array[N] real y;
+}
+transformed data {
+    real M;
+    real<lower = 0> S;
+    real<lower = 0> Rate;
+    
+    M = 100;   // mean centered at 100
+    S = 50;    // mean between 0 and 200
+    Rate = 1.0/50; // sd of 50
+
 }
 parameters {
-    real<lower = 0> mu;
+    real mu;
     real<lower = 0> sigma;
 }
 model {
     mu ~ normal(M, S);
-    sigma ~ uniform(L, H);
-//    y ~ normal(mu, sigma);
+    sigma ~ exponential(Rate);
+    y ~ normal(mu, sigma);
+}
+generated quantities {
+    array[N] real y_sim;
+    
+    for (n in 1:N) {
+        y_sim[n] = normal_rng(mu, sigma);
+    }
 }
 ```
 
-```{r}
-set.seed(11111)
-fit_IQ_prior <- sampling(IQ_prior, data = stan_data, refresh = 0)
+```{r, cache = TRUE}
+fit_IQ <- sampling(IQ,
+                   data = stan_data,
+                   seed = 11111,
+                   refresh = 0)
 ```
 
 ```{r}
-fit_IQ_prior
+samples_IQ <- tidy_draws(fit_IQ)
+samples_IQ
+```
+
+## Model diagnostics
+
+```{r}
+stan_trace(fit_IQ,
+           pars = c("mu", "sigma"))
 ```
 
 ```{r}
-pairs(fit_IQ_prior, pars = c("mu", "sigma"))
+mcmc_acf(fit_IQ,
+         pars = c("mu", "sigma"))
 ```
 
 ```{r}
-plot(fit_IQ_prior, pars = c("mu", "sigma"))
+mcmc_rhat(rhat(fit_IQ))
+```
+
+```{r}
+mcmc_neff(neff_ratio(fit_IQ))
+```
+
+
+## Model summary
+
+```{r}
+print(fit_IQ,
+      pars = c("mu", "sigma"))
+```
+
+
+## Model visualization
+
+```{r}
+mcmc_areas(fit_IQ, pars = "mu")
+```
+
+```{r}
+mcmc_areas(fit_IQ, pars = "sigma")
+```
+
+```{r}
+pairs(fit_IQ,
+      pars = c("mu", "sigma"))
 ```
 
 
 ## Posterior predictive check
 
-Extract predicted values:
-
 ```{r}
-samples_IQ <- extract(fit_IQ)
-y_rep <- samples_IQ$y_rep
-```
-
-Graph values of $y$ against summaries of $y_{rep}$. There are lots of options for numerical data.
-
-For the ones that generate lots of subgraphs, we'll only compare the data to the first 5 replications.
-
-```{r}
-ppc_hist(y, y_rep[1:5, ])
+y_sim_IQ <- samples_IQ %>%
+    dplyr::select(starts_with("y_sim")) %>%
+    as.matrix()
 ```
 
 ```{r}
-ppc_boxplot(y, y_rep[1:5, ])
+ppc_hist(y = y,
+         yrep = y_sim_IQ[1:19, ])
 ```
 
 ```{r}
-ppc_dens(y, y_rep[1:5, ])
+ppc_boxplot(y = y,
+            yrep = y_sim_IQ[1:10, ],
+            notch = FALSE)
 ```
-
-In an overlay, we can include a few more. (In theory, we could include all replications, but the function takes a long time to process.)
 
 ```{r}
-ppc_dens_overlay(y, y_rep[1:30, ])
+ppc_dens_overlay(y = y,
+                 yrep = y_sim_IQ[1:50, ])
 ```
-
-For test statistics, we can include all replications.
 
 ```{r}
-ppc_stat_2d(y, y_rep)
+ppc_scatter(y = y,
+            yrep = y_sim_IQ[1:9, ])
 ```
-
-Same goes for intervals. (This graph is getting a little on the busy side. For larger data sets, we would want to limit the number of replications in one plot.
 
 ```{r}
-ppc_intervals(y, y_rep)
+ppc_scatter_avg(y = y,
+                yrep = y_sim_IQ)
 ```
 
-
-## ShinyStan
-
-Run the following code from the Console:
-
+```{r}
+ppc_intervals(y = y,
+              yrep = y_sim_IQ[1:19, ])
 ```
-launch_shinystan(fit_IQ)
+
+```{r}
+ppc_stat(y = y,
+         yrep = y_sim_IQ)
 ```
+
+```{r}
+ppc_stat_2d(y = y,
+            yrep = y_sim_IQ)
+```
+

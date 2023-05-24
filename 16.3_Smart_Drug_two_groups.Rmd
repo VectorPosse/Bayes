@@ -13,10 +13,10 @@ This is the example from Section 16.3 of Kruschke on the (fictitious) effect of 
 
 Load necessary packages:
 
-```{r, message = FALSE}
+```{r}
 library(tidyverse)
 library(rstan)
-library(shinystan)
+library(tidybayes)
 library(bayesplot)
 ```
 
@@ -40,301 +40,358 @@ IQ_data <- read_csv("TwoGroupIQ.csv")
 IQ_data
 ```
 
-Since we are now comparing both groups, we can use the whole data set (120 total observations: 63 experimental and 57 control):
+Since we are now comparing two groups, we can use the whole data set (120 total observations: 63 experimental and 57 control):
 
 ```{r}
 table(IQ_data$Group)
 ```
 
-We will, however, need to give the groups numerical values to pass to Stan (rather than the strings "Smart Drug" and "Placebo"). The easiest way to do this is to `factor` the `Group` variable. This will change the underlying structure to 1s and 2s. Observe:
+We will, however, need to give the groups numerical values to pass to Stan (rather than the strings "Placebo" and "Smart Drug"). The easiest way to do this is to `factor` the `Group` variable and then convert the factor variable to a numeric variable. This will change the underlying structure to 1s and 2s. Observe:
 
 ```{r}
-x <- factor(IQ_data$Group,
-            levels = c("Smart Drug", "Placebo"))
-str(x)
+IQ_data <- IQ_data %>%
+    mutate(Group_num = as.numeric(factor(Group)))
+IQ_data
 ```
 
-Now "Smart Drug" is 1 and "Placebo" is 2. All we have to do is convert this factor variable into a vector of integers that Stan will accept.
+Now "Placebo" is 1 and "Smart Drug" is 2.
+
+We will also calculate the total number of groups and pass it to Stan as data. While we only have two groups, we can write the code to allow for any number of groups.
 
 ```{r}
-x <- as.integer(x)
+G <- IQ_data %>%
+    summarize(n_distinct(Group)) %>%
+    pull()
+G
 ```
 
-And bundle everything together into a list:
+
+Bundle everything together into a list:
 
 ```{r}
 N <- NROW(IQ_data)
 y <- IQ_data$Score
-stan_data <- list(N = N, x = x, y = y)
+G <- G
+group <- IQ_data$Group_num
+stan_data <- list(N = N, y = y, G = G, group = group)
 ```
 
 
-## Stan code
+## Prior
 
-Now we include the `x` variable that is either 1 or 2 to indicate group. We also let `mu` and `sigma` have two possible values.
+### Simulation code
 
-The only change to the model is the likelihood:
+Almost the same as in the other Chapter 16 examples, except that now we have a group index, `g`. There will be a $\mu_{g}$ and $\sigma_{g}$ for each group, but only one choice of `nu` (for convenience). 
 
+```{stan, output.var = "IQ2_prior", cache = TRUE}
+data {
+    int<lower = 0> N;
+    array[N] real y;
+    int<lower = 1> G;
+    array[N] int<lower = 1, upper = G> group;
+}
+transformed data {
+    real M;
+    real<lower = 0> S;
+    real<lower = 0> R_nu_minus_one;
+    real<lower = 0> R_sigma;
+    
+    M = 100;   // mean centered at 100
+    S = 50;    // mean between 0 and 200
+    R_nu_minus_one = 1.0/29;  // df of 30
+    R_sigma = 1.0/50;         // sd of 50
+}
+generated quantities {
+    real<lower = 0> nu_minus_one;
+    real<lower = 1> nu;
+    array[G] real mu;
+    array[G] real<lower = 0> sigma;
+    array[N] real y_sim;
+    
+    nu_minus_one = exponential_rng(R_nu_minus_one);
+    nu = nu_minus_one + 1;
+    
+    for(g in 1:G) {
+        mu[g] = normal_rng(M, S);
+        sigma[g] = exponential_rng(R_sigma);
+    }
+    
+    for(n in 1:N) {
+        y_sim[n] = student_t_rng(nu, mu[group[n]], sigma[group[n]]);
+    }
+}
 ```
-y ~ student_t(nu, mu[x], sigma[x]);
+
+```{r, cache = TRUE}
+fit_IQ2_prior <- sampling(IQ2_prior,
+                                data = stan_data,
+                                chains = 1,
+                                algorithm = "Fixed_param",
+                                seed = 11111,
+                                refresh = 0)
 ```
 
-The terms `mu[x]` and `sigma[x]` ensure that the `y` value is used only for the group to which that observation belongs (1 or 2).
+```{r}
+samples_IQ2_prior <- tidy_draws(fit_IQ2_prior)
+samples_IQ2_prior
+```
 
-One more interesting change is to the `generated quantities` block. We've only used this to generate random draws from our posterior for posterior predictive checks. But technically, we can calculate anything we want in this block. Since the difference of two means is the primary object of our inference, we compute a `diff` variable here as the difference in the two sampled values of `mu`.
+### Examine prior
+
+```{r}
+mcmc_hist(samples_IQ2_prior,
+          pars = "nu")
+```
+
+```{r}
+mcmc_hist(samples_IQ2_prior,
+          pars = vars(starts_with("mu")))
+```
+
+```{r}
+mcmc_hist(samples_IQ2_prior,
+          pars = vars(starts_with("sigma")))
+```
+
+```{r}
+mcmc_pairs(fit_IQ2_prior,
+           pars = vars("nu", starts_with(c("mu", "sigma"))))
+```
+
+### Prior predictive distribution
+
+With multiple groups, this is a little tricky. For example, the column `y_sim[1]` is sampled using the group parameters for the 1st patient, who happens to be in the Smart Drug group, group 2. In other words, that data depends on $\mu_{2}$ and $\sigma_{2}$. However, `y_sim[120]` is sampled using $\mu_{1}$ and $\sigma_{1}$ since patient 120 was in the Placebo group.
+
+While some `ppd_` commands have grouped versions, others do not. If it were easy to do so, we would `select` out only the `y_sim[j]` columns for all values of j belonging to one group. This would require quite a bit of code, however, so we'll just take what we can get.
+
+At least for this data set, all the patients in each group appear consecutively in the data. Therefore, we get lucky in that we can just grab entries from each group separately: 1--63 for group 2 (Smart Drug) and 64--120 for group 1 (Placebo).
+
+```{r}
+y_sim_IQ2_prior <- samples_IQ2_prior %>%
+    dplyr::select(starts_with("y_sim")) %>%
+    as.matrix()
+```
+
+Group 1 (Placebo):
+
+```{r}
+ppd_hist(ypred = y_sim_IQ2_prior[1:20, 64:120])
+```
+
+```{r}
+ppd_boxplot(ypred = y_sim_IQ2_prior[1:10, 64:120],
+            notch = FALSE)
+```
+
+Group 2 (Smart Drug):
+
+```{r}
+ppd_hist(ypred = y_sim_IQ2_prior[1:20, 1:63])
+```
+
+```{r}
+ppd_boxplot(ypred = y_sim_IQ2_prior[1:10, 1:63],
+            notch = FALSE)
+```
+
+Some `ppd_` functions have a `grouped` version for comparing groups.
+
+```{r}
+ppd_intervals_grouped(ypred = y_sim_IQ2_prior,
+                      group = group)
+```
+
+
+## Model
+
+The only change here is the addition of a `diff` variable to record the difference between the two group means. (If G is larger than 2, this code could be changed to calculate the difference between any two parameters of interest.)
 
 ```{stan, output.var = "IQ2", cache = TRUE}
 data {
     int<lower = 0> N;
-    int<lower = 1, upper = 2> x[N];
-    real<lower = 0> y[N];
+    array[N] real y;
+    int<lower = 1> G;
+    array[N] int<lower = 1, upper = G> group;
 }
 transformed data {
-    real<lower = 0> Rate;
-    real<lower = 0> M;
+    real M;
     real<lower = 0> S;
-    real<lower = 0> L;
-    real<lower = 0> H;
+    real<lower = 0> R_nu_minus_one;
+    real<lower = 0> R_sigma;
     
-    Rate = 1.0/29.0;
-    M = 100;
-    S = 100;
-    L = 0;
-    H = 1000;
+    M = 100;   // mean centered at 100
+    S = 50;    // mean between 0 and 200
+    R_nu_minus_one = 1.0/29;  // df of 30
+    R_sigma = 1.0/50;         // sd of 50
 }
 parameters {
     real<lower = 0> nu_minus_one;
-    real<lower = 0> mu[2];
-    real<lower = 0> sigma[2];
+    array[G] real mu;
+    array[G] real<lower = 0> sigma;
 }
 transformed parameters {
-    real<lower = 0> nu;
-
+    real<lower = 1> nu;
+    
     nu = nu_minus_one + 1;
 }
 model {
-    nu_minus_one ~ exponential(Rate);
+    nu_minus_one ~ exponential(R_nu_minus_one);
     mu ~ normal(M, S);
-    sigma ~ uniform(L, H);
-    y ~ student_t(nu, mu[x], sigma[x]);
+    sigma ~ exponential(R_sigma);
+    y ~ student_t(nu, mu[group], sigma[group]);
 }
 generated quantities {
-    real y_rep[N];
+    array[N] real y_sim;
     real diff;
     
     for (n in 1:N) {
-        y_rep[n] = student_t_rng(nu, mu[x[n]], sigma[x[n]]);
+        y_sim[n] = student_t_rng(nu, mu[group[n]], sigma[group[n]]);
     }
     
     diff = mu[1] - mu[2];
 }
 ```
 
-
-## Sampling from the model
-
-```{r}
-set.seed(11111)
-fit_IQ2 <- sampling(IQ2, data = stan_data, refresh = 0)
-```
-
-
-## Diagnosing the model
-
-```{r}
-plot(fit_IQ2, plotfun = "ac", pars = c("nu", "mu", "sigma"))
+```{r, cache = TRUE}
+fit_IQ2 <- sampling(IQ2,
+                   data = stan_data,
+                   seed = 11111,
+                   refresh = 0)
 ```
 
 ```{r}
-plot(fit_IQ2, plotfun = "trace",
-     pars = c("nu", "mu", "sigma"))
+samples_IQ2 <- tidy_draws(fit_IQ2)
+samples_IQ2
 ```
 
-
-## Summarizing the model
-
-```{r}
-print(fit_IQ2, pars = c("nu", "mu", "sigma", "diff"))
-```
-
-
-## Visualizing the model
+## Model diagnostics
 
 ```{r}
-pairs(fit_IQ2, pars = c("mu"))
+stan_trace(fit_IQ2,
+           pars = c("nu", "mu", "sigma"))
 ```
 
 ```{r}
-pairs(fit_IQ2, pars = c("sigma"))
+mcmc_acf(fit_IQ2,
+         pars = vars("nu", starts_with(c("mu","sigma"))))
 ```
 
 ```{r}
-pairs(fit_IQ2, pars = c("mu[1]", "sigma[1]"))
+mcmc_rhat(rhat(fit_IQ2))
 ```
 
 ```{r}
-pairs(fit_IQ2, pars = c("mu[2]", "sigma[2]"))
+mcmc_neff(neff_ratio(fit_IQ2))
+```
+
+
+## Model summary
+
+```{r}
+print(fit_IQ2,
+      pars = c("nu", "mu", "sigma"))
+```
+
+
+## Model visualization
+
+```{r}
+mcmc_areas(fit_IQ2, pars = "nu")
 ```
 
 ```{r}
-plot(fit_IQ2, plotfun = "dens", pars = c("nu", "mu", "sigma", "diff"))
+mcmc_areas(fit_IQ2, pars = vars(starts_with("mu")))
 ```
 
 ```{r}
-plot(fit_IQ2, pars = c("mu"))
+mcmc_areas(fit_IQ2, pars = vars(starts_with("sigma")))
 ```
 
 ```{r}
-plot(fit_IQ2, pars = c("sigma"))
-```
-
-```{r}
-plot(fit_IQ2, pars = c("diff"))
-```
-
-
-## Examining the prior
-
-```{stan, output.var = "IQ2_prior", cache = TRUE}
-data {
-    int<lower = 0> N;
-    int<lower = 1, upper = 2> x[N];
-    real<lower = 0> y[N];
-}
-transformed data {
-    real<lower = 0> Rate;
-    real<lower = 0> M;
-    real<lower = 0> S;
-    real<lower = 0> L;
-    real<lower = 0> H;
-    
-    Rate = 1.0/29.0;
-    M = 100;
-    S = 100;
-    L = 0;
-    H = 1000;
-}
-parameters {
-    real<lower = 0> nu_minus_one;
-    real<lower = 0> mu[2];
-    real<lower = 0> sigma[2];
-}
-transformed parameters {
-    real<lower = 0> nu;
-
-    nu = nu_minus_one + 1;
-}
-model {
-    nu_minus_one ~ exponential(Rate);
-    mu ~ normal(M, S);
-    sigma ~ uniform(L, H);
-//    y ~ student_t(nu, mu[x], sigma[x]);
-}
-```
-
-```{r}
-set.seed(11111)
-fit_IQ2_prior <- sampling(IQ2_prior, data = stan_data, refresh = 0)
-```
-
-```{r}
-fit_IQ2_prior
-```
-
-```{r}
-pairs(fit_IQ2_prior, pars = c("nu", "mu", "sigma"))
-```
-
-```{r}
-plot(fit_IQ2_prior, pars = c("nu", "mu", "sigma"))
+pairs(fit_IQ2,
+      pars = c("nu", "mu", "sigma"))
 ```
 
 
 ## Posterior predictive check
 
-Extract predicted values:
-
 ```{r}
-samples_IQ2 <- extract(fit_IQ2)
-y_rep <- samples_IQ2$y_rep
+y_sim_IQ2 <- samples_IQ2 %>%
+    dplyr::select(starts_with("y_sim")) %>%
+    as.matrix()
 ```
 
-There are interesting posterior predictive checks for grouped data.
+Same issue as before: it's hard to make sure we look at representative samples from both groups in general, but it's easy for this data set.
+
+
+Group 1 (Placebo):
 
 ```{r}
-ppc_intervals_grouped(y, y_rep, group = x)
-```
-
-
-```{r}
-ppc_stat_grouped(y, y_rep, group = x)
-```
-
-Or we can use the familiar ones as long as we're careful to subset. We'll make a vector of which y values belong to which group:
-
-```{r}
-drug <- which(x == 1)
-placebo <- which(x == 2)
+ppc_hist(y = y[64:120],
+         yrep = y_sim_IQ2[1:19, 64:120])
 ```
 
 ```{r}
-ppc_hist(y[drug], y_rep[1:5, drug])
+ppc_boxplot(y = y[64:120],
+            yrep = y_sim_IQ2[1:10, 64:120],
+            notch = FALSE)
 ```
 
 ```{r}
-ppc_hist(y[placebo], y_rep[1:5, placebo])
+ppc_scatter(y = y[64:120],
+            yrep = y_sim_IQ2[1:9, 64:120])
 ```
 
 ```{r}
-ppc_boxplot(y[drug], y_rep[1:5, drug])
+ppc_stat_2d(y = y[64:120],
+            yrep = y_sim_IQ2[, 64:120])
+```
+
+Group 2 (Smart Drug):
+
+```{r}
+ppc_hist(y = y[1:63],
+         yrep = y_sim_IQ2[1:19, 1:63])
 ```
 
 ```{r}
-ppc_boxplot(y[placebo], y_rep[1:5, placebo])
+ppc_boxplot(y = y[1:63],
+            yrep = y_sim_IQ2[1:10, 1:63],
+            notch = FALSE)
 ```
 
 ```{r}
-ppc_dens(y[drug], y_rep[1:5, drug])
+ppc_scatter(y = y[1:63],
+            yrep = y_sim_IQ2[1:9, 1:63])
 ```
 
 ```{r}
-ppc_dens(y[placebo], y_rep[1:5, placebo])
+ppc_stat_2d(y = y[1:63],
+            yrep = y_sim_IQ2[, 1:63])
+```
+
+The following PPC graphs have grouped versions.
+
+```{r}
+ppc_stat_grouped(y = y,
+                 yrep = y_sim_IQ2,
+                 group = group)
 ```
 
 ```{r}
-ppc_dens_overlay(y[drug], y_rep[1:30, drug])
+ppc_dens_overlay_grouped(y = y,
+                         yrep = y_sim_IQ2[1:50, ],
+                         group = group)
 ```
 
 ```{r}
-ppc_dens_overlay(y[placebo], y_rep[1:30, placebo])
+ppc_scatter_avg_grouped(y = y,
+                        yrep = y_sim_IQ2,
+                        group = group)
 ```
 
 ```{r}
-ppc_stat_2d(y[drug], y_rep[ , drug])
-```
-
-```{r}
-ppc_stat_2d(y[placebo], y_rep[ , placebo])
-```
-
-Just for giggles, let's also check that we can recover our `diff` parameter from the extracted samples:
-
-```{r}
-test_diff <- samples_IQ2$mu[ ,1] - samples_IQ2$mu[ ,2]
-head(test_diff)
-```
-
-```{r}
-head(samples_IQ2$diff)
-```
-
-So we could also have calculated the difference of means manually, but the benefit of doing it within the Stan code is that we can use all the Stan features to graph `diff` as a parameter rather than having to roll our own code to visualize `diff`.
-
-
-## ShinyStan
-
-Run the following code from the Console:
-
-```
-launch_shinystan(fit_IQ2)
+ppc_intervals_grouped(y = y,
+                      yrep = y_sim_IQ2[1:19, ],
+                      group = group)
 ```
